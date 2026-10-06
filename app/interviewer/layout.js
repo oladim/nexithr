@@ -1,0 +1,101 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/context/AuthContext";
+import {
+  IconGrid,
+  IconCalendar,
+  IconCard,
+  IconBell,
+  IconLogout,
+  IconSearch,
+  IconMenu,
+  IconChevronRight,
+} from "@/components/Icons";
+import StaffGate from "@/components/StaffGate";
+import TwoFactorGate from "@/components/TwoFactorGate";
+
+const NAV = [
+  { href: "/interviewer", label: "Dashboard", Icon: IconGrid },
+  { href: "/interviewer/interview", label: "Interview", Icon: IconCalendar },
+  { href: "/interviewer/earnings", label: "Earnings", Icon: IconCard },
+  { href: "/interviewer/notifications", label: "Notifications", Icon: IconBell },
+];
+
+export default function InterviewerLayout({ children }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, hydrated, interviewerKind, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (hydrated && !user) router.replace("/login");
+  }, [hydrated, user, router]);
+  useEffect(() => setOpen(false), [pathname]);
+
+  if (!hydrated || !user) return null;
+
+  const initials = (user.name || "I").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const isHR = interviewerKind === "HR";
+
+  return (
+    <div className="shell">
+      <aside className={`sidebar ${open ? "open" : ""}`}>
+        <div className="sidebar-brand">
+          <svg className="mk" viewBox="0 0 39 49" fill="none" aria-hidden="true">
+            <path d="M4 45V9c0-2 2.4-3 3.9-1.6L31 30V4h4v36c0 2-2.4 3-3.9 1.6L8 18v27H4z" fill="#007bff" />
+          </svg>
+          <span className="nm">NexIT-Africa</span>
+        </div>
+        <div style={{ padding: "0 8px 12px" }}>
+          <span className={`role-badge ${isHR ? "hr" : ""}`}>{interviewerKind} Interviewer</span>
+        </div>
+        <nav className="sidebar-nav">
+          {NAV.map(({ href, label, Icon }) => {
+            const active = href === "/interviewer" ? pathname === "/interviewer" : pathname.startsWith(href);
+            return (
+              <Link key={href} href={href} className={`nav-item ${active ? "active" : ""}`}>
+                <Icon />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="sidebar-foot">
+          <button className="nav-item" onClick={() => { logout(); router.replace("/login"); }}>
+            <IconLogout />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      {open && <div className="scrim show" onClick={() => setOpen(false)} />}
+
+      <div className="main-area">
+        <header className="topbar">
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+            <button className="icon-btn burger" onClick={() => setOpen(true)} aria-label="Open menu">
+              <IconMenu />
+            </button>
+            <div className="who">
+              <strong>{user.name}</strong>
+              <span>{interviewerKind} Interviewer</span>
+            </div>
+          </div>
+          <div className="acts">
+            <span className="icon-btn"><IconSearch /></span>
+            <Link href="/interviewer/notifications" className="icon-btn"><IconBell /></Link>
+            <span className="avatar">
+              <span className="pic">{initials}</span>
+              <span className="nm2">{user.name}</span>
+              <IconChevronRight width={16} height={16} style={{ color: "#9aa2ae" }} />
+            </span>
+          </div>
+        </header>
+        <div className="content"><TwoFactorGate><StaffGate>{children}</StaffGate></TwoFactorGate></div>
+      </div>
+    </div>
+  );
+}

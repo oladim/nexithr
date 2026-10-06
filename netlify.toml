@@ -1,0 +1,24 @@
+# Netlify configuration for the NexIT-Africa Next.js app.
+# The official Next.js runtime plugin gives App Router API routes, middleware
+# (Supabase auth cookie refresh) and SSR their serverless functions.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# NOTE: environment variables are NOT set here (secrets don't belong in the
+# repo). Set them in Netlify → Site configuration → Environment variables:
+#   NEXT_PUBLIC_SUPABASE_URL          (required, public)
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY     (required, public)
+#   SUPABASE_SERVICE_ROLE_KEY         (required, server-only secret)
+#   NEXT_PUBLIC_APP_URL               (your Netlify URL, for email links)
+#   RESEND_API_KEY, EMAIL_FROM        (optional — email)
+#   PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY   (optional — payments)
+#   GOOGLE_* / ANTHROPIC_API_KEY      (optional — Meet / AI)
+#
+# IMPORTANT: the NEXT_PUBLIC_* values are baked into the browser bundle at
+# BUILD time. After adding or changing them you must trigger a fresh build
+# (Deploys → Trigger deploy → "Clear cache and deploy site"), or the site keeps
+# running the old bundle (demo mode) and won't connect to Supabase.

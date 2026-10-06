@@ -1,0 +1,121 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/context/AuthContext";
+import TwoFactorGate from "@/components/TwoFactorGate";
+import {
+  IconGrid,
+  IconFileText,
+  IconCalendar,
+  IconCap,
+  IconUser,
+  IconGear,
+  IconLogout,
+  IconSearch,
+  IconBell,
+  IconMenu,
+  IconChevronRight,
+  IconBriefcase,
+} from "@/components/Icons";
+
+const NAV = [
+  { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
+  { href: "/dashboard/cv-upload", label: "CV Upload", Icon: IconFileText },
+  { href: "/dashboard/interview", label: "Interview", Icon: IconCalendar },
+  { href: "/dashboard/training", label: "Training", Icon: IconCap },
+  { href: "/dashboard/jobs", label: "Job Board", Icon: IconBriefcase },
+  { href: "/dashboard/profile", label: "Profile", Icon: IconUser },
+  { href: "/dashboard/settings", label: "Settings", Icon: IconGear },
+];
+
+export default function DashboardLayout({ children }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, hydrated, logout } = useAuth();
+  const [open, setOpen] = useState(false); // mobile drawer
+
+  // Route guard — bounce to login if there's no session.
+  useEffect(() => {
+    if (hydrated && !user) router.replace("/login");
+  }, [hydrated, user, router]);
+
+  // Close the drawer whenever the route changes.
+  useEffect(() => setOpen(false), [pathname]);
+
+  if (!hydrated || !user) return null;
+
+  const initials = (user.name || "C")
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className="shell">
+      <aside className={`sidebar ${open ? "open" : ""}`}>
+        <div className="sidebar-brand">
+          <svg className="mk" viewBox="0 0 39 49" fill="none" aria-hidden="true">
+            <path d="M4 45V9c0-2 2.4-3 3.9-1.6L31 30V4h4v36c0 2-2.4 3-3.9 1.6L8 18v27H4z" fill="#007bff" />
+          </svg>
+          <span className="nm">NexIT-Africa</span>
+        </div>
+        <nav className="sidebar-nav">
+          {NAV.map(({ href, label, Icon }) => {
+            const active =
+              href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(href);
+            return (
+              <Link key={href} href={href} className={`nav-item ${active ? "active" : ""}`}>
+                <Icon />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="sidebar-foot">
+          <button
+            className="nav-item"
+            onClick={() => {
+              logout();
+              router.replace("/login");
+            }}
+          >
+            <IconLogout />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      {open && <div className="scrim show" onClick={() => setOpen(false)} />}
+
+      <div className="main-area">
+        <header className="topbar">
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+            <button className="icon-btn burger" onClick={() => setOpen(true)} aria-label="Open menu">
+              <IconMenu />
+            </button>
+            <div className="who">
+              <strong>{user.name}</strong>
+              <span>Candidate</span>
+            </div>
+          </div>
+          <div className="acts">
+            <span className="icon-btn"><IconSearch /></span>
+            <span className="icon-btn"><IconBell /></span>
+            <span className="avatar">
+              <span className="pic">{initials}</span>
+              <span className="nm2">{user.name}</span>
+              <IconChevronRight width={16} height={16} style={{ color: "#9aa2ae" }} />
+            </span>
+          </div>
+        </header>
+
+        <div className="content"><TwoFactorGate>{children}</TwoFactorGate></div>
+      </div>
+    </div>
+  );
+}
