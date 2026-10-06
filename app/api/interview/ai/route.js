@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { extractPdfText } from "@/lib/cvAnalyze";
-import { loadRoleRequirements, ROLE_LABELS } from "@/lib/db";
+import { loadRoleRequirements, ROLE_LABELS, loadSettings, bandFor, loadCandidateAccess } from "@/lib/db";
 import { anthropicChat, anthropicEnabled } from "@/lib/anthropic";
 import {
   buildInterviewSystem,
@@ -129,6 +129,53 @@ async function resolveSystem(key, body) {
   return system;
 }
 
+// Persist the server-computed AI assessment for the signed-in candidate using
+// the service role — the browser can no longer write ai_interviews, so this is
+// the authoritative record. Band / pass / approval status are derived from the
+// admin settings server-side, so a candidate can't dictate their own outcome.
+async function persistAiResult(me, assessment) {
+  const admin = getServiceSupabase();
+  if (!admin || !me || me.role !== "candidate" || !assessment) return null;
+  try {
+    const settings = await loadSettings(admin);
+    const overall = Math.round(Number(assessment.overall) || 0);
+    const band = bandFor(overall, settings);
+    const passed = band === "ready";
+    const status = settings.ai_result_requires_approval ? "pending_review" : "released";
+    const now = new Date().toISOString();
+    const { data: cur } = await admin.from("ai_interviews").select("attempts").eq("candidate_id", me.id).maybeSingle();
+    const attempts = (cur?.attempts ?? 0) + 1;
+    await admin.from("ai_interviews").upsert({
+      candidate_id: me.id, attempts, last_score: overall, passed,
+      breakdown: assessment.breakdown, feedback: assessment.summary,
+      band, suggested_training: assessment.suggestedTraining || null, status, updated_at: now,
+    }, { onConflict: "candidate_id" });
+    await admin.from("candidates").update({ last_ai_attempt_at: now }).eq("id", me.id);
+    return { attempts, score: overall, passed, band, status };
+  } catch { return null; }
+}
+
+// Enforce the retake cooldown server-side (defense-in-depth; the client also
+// hides the start button). First `free_ai_retakes` attempts are free; after
+// that it's locked for 30 days unless the candidate is subscribed.
+async function retakeBlock(me) {
+  const admin = getServiceSupabase();
+  if (!admin || !me || me.role !== "candidate") return null;
+  try {
+    const settings = await loadSettings(admin);
+    const access = await loadCandidateAccess(admin, me.id);
+    const { data: aiRow } = await admin.from("ai_interviews").select("attempts").eq("candidate_id", me.id).maybeSingle();
+    const attempts = aiRow?.attempts ?? 0;
+    const free = Number(settings.free_ai_retakes ?? 1);
+    const lastAt = access.lastAiAttemptAt ? new Date(access.lastAiAttemptAt).getTime() : 0;
+    const nextEligible = lastAt ? lastAt + 30 * 24 * 3600 * 1000 : 0;
+    if (!access.subscribed && attempts > free && lastAt > 0 && Date.now() < nextEligible) {
+      return { blocked: true, reason: "cooldown", nextEligibleAt: new Date(nextEligible).toISOString() };
+    }
+  } catch { /* fail open — the client gate still applies */ }
+  return null;
+}
+
 // Clean the transcript into Anthropic's alternating user/assistant shape.
 function sanitizeMessages(raw) {
   const msgs = (Array.isArray(raw) ? raw : [])
@@ -186,6 +233,10 @@ export async function POST(request) {
 
   // ---- start ----
   if (action === "start") {
+    const meStart = await getSessionProfile().catch(() => null);
+    const block = await retakeBlock(meStart);
+    if (block) return NextResponse.json(block);
+
     const system = await resolveSystem(key, body);
     if (!system) return NextResponse.json({ mode: "demo", reason: "no-context" });
 
@@ -222,7 +273,11 @@ export async function POST(request) {
     const looksFinal = res.text.includes(FINAL_MARKER) || /```/.test(res.text) || /"competencies"\s*:/.test(res.text);
     if (looksFinal) {
       const parsed = parseFinalAssessment(res.text);
-      if (parsed.assessment) return NextResponse.json({ mode: "ai", final: parsed.assessment });
+      if (parsed.assessment) {
+        const meFin = await getSessionProfile().catch(() => null);
+        const persisted = await persistAiResult(meFin, parsed.assessment);
+        return NextResponse.json({ mode: "ai", final: parsed.assessment, persisted });
+      }
       // Report was emitted but couldn't be parsed (e.g. truncated) — ask the
       // client to run a clean finalize pass instead of speaking raw JSON.
       return NextResponse.json({ mode: "ai", needsFinalize: true });
@@ -245,7 +300,9 @@ export async function POST(request) {
 
     const parsed = parseFinalAssessment(res.text);
     if (parsed.error) return NextResponse.json({ mode: "ai", text: res.text, final: null, parseError: parsed.error });
-    return NextResponse.json({ mode: "ai", final: parsed.assessment });
+    const meFin = await getSessionProfile().catch(() => null);
+    const persisted = await persistAiResult(meFin, parsed.assessment);
+    return NextResponse.json({ mode: "ai", final: parsed.assessment, persisted });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

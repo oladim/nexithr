@@ -34,6 +34,14 @@ export default function CandidateDetail() {
 
   const [aiFinal, setAiFinal] = useState(app.aiFinal?.[id] || null);
 
+  // Verdict state (real mode): the interviewer's authoritative decision.
+  const [decision, setDecision] = useState(null); // "advance" | "reject"
+  const [outcome, setOutcome] = useState(null);    // recorded stage result
+  const [booking, setBooking] = useState(null);
+  const [vBusy, setVBusy] = useState(false);
+  const [vMsg, setVMsg] = useState("");
+  const [vErr, setVErr] = useState("");
+
   useEffect(() => {
     if (!supabaseEnabled) return;
     (async () => {
@@ -44,6 +52,8 @@ export default function CandidateDetail() {
       setMyId(uid);
       const d = await loadInterviewerCandidate(sb, id, interviewerKind, uid);
       setInfo({ ...d, color: "#7c9cff" });
+      setOutcome(d.outcome || null);
+      setBooking(d.booking || null);
       if (d.myNote) {
         setRating(d.myNote.rating || 0);
         setStrengths(d.myNote.strengths || "");
@@ -72,6 +82,31 @@ export default function CandidateDetail() {
     setSaved(true);
   };
 
+  // The interviewer's authoritative decision — records the candidate's stage
+  // result server-side (passing HR puts them on the board).
+  const submitVerdict = async () => {
+    setVErr(""); setVMsg("");
+    if (!rating) { setVErr("Please rate the candidate first (stars on the left)."); return; }
+    if (!decision) { setVErr("Choose Advance or Do not advance."); return; }
+    if (!supabaseEnabled) {
+      setOutcome({ passed: decision === "advance", verdict: decision === "advance" ? "Recommended to advance" : "Not recommended", avg: rating });
+      setVMsg("Recorded (demo). In real mode this sets the candidate's official stage result and notifies them.");
+      return;
+    }
+    setVBusy(true);
+    try {
+      const res = await fetch("/api/interviewer/verdict", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: id, stage: interviewerKind, decision, rating, strengths, improvements, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit");
+      setOutcome(data.result);
+      setSaved(true);
+      setVMsg(data.passed ? "Verdict submitted — the candidate has advanced and been notified." : "Verdict submitted — the candidate has been notified.");
+    } catch (e) { setVErr(e.message); } finally { setVBusy(false); }
+  };
+
   const generate = () => {
     const summary = synthesizeNotes(allNotes);
     if (summary) {
@@ -96,6 +131,42 @@ export default function CandidateDetail() {
           <h1>{info.name}</h1>
           <p>{info.role} · {interviewerKind} stage</p>
         </div>
+      </div>
+
+      {/* Decision & verdict — the authoritative stage result */}
+      <div className="card pad" style={{ marginTop: 18, borderColor: outcome ? (outcome.passed ? "rgba(46,204,113,.4)" : "rgba(255,59,48,.3)") : undefined }}>
+        <h3 className="card-title" style={{ marginTop: 0 }}>Decision &amp; verdict</h3>
+        {outcome ? (
+          <div className={`role-note ${outcome.passed ? "ok" : ""}`} style={!outcome.passed ? { background: "rgba(255,59,48,.08)", color: "#c0392b" } : undefined}>
+            Verdict recorded: <b>{outcome.verdict}</b>{outcome.avg ? ` · avg ${outcome.avg}/5` : ""}.{" "}
+            {outcome.passed ? (interviewerKind === "HR" ? "The candidate has passed all stages and is on the board." : "The candidate has advanced to HR.") : "The candidate can retry this stage with an assessment token."}
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
+              {booking ? (
+                <>Scheduled for <b>{booking.date}, {booking.time}</b>. {booking.meetLink && <a href={booking.meetLink} target="_blank" rel="noreferrer" className="link">Join on Google Meet →</a>}</>
+              ) : "No upcoming booking for this stage yet."}
+            </p>
+            <p style={{ fontSize: 13, color: "var(--muted)" }}>
+              Rate the candidate below, then record your decision. This sets their official <b>{interviewerKind}</b> result and notifies them.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "6px 0 12px" }}>
+              <button className={decision === "advance" ? "btn-solid" : "btn-outline"} onClick={() => setDecision("advance")}>
+                <IconCheck width={15} height={15} /> Advance
+              </button>
+              <button className={decision === "reject" ? "btn-solid" : "btn-outline"} onClick={() => setDecision("reject")}>
+                Do not advance
+              </button>
+            </div>
+            {vErr && <div className="auth-error" style={{ marginBottom: 10 }}>{vErr}</div>}
+            {vMsg && <div className="role-note ok" style={{ marginBottom: 10 }}>{vMsg}</div>}
+            <button className="btn-solid" disabled={vBusy || !rating || !decision} onClick={submitVerdict}>
+              {vBusy ? "Submitting…" : "Submit verdict & record result"}
+            </button>
+          </>
+        )}
+        {outcome && vMsg && <div className="role-note ok" style={{ marginTop: 12 }}>{vMsg}</div>}
       </div>
 
       <div className="note-cols">

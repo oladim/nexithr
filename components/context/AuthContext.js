@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { SUPABASE_ENABLED } from "@/lib/supabase/config";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import * as db from "@/lib/db";
+import { computeStageResult } from "@/components/interview/stage";
 
 /**
  * Auth/session store for the candidate flow.
@@ -338,43 +339,57 @@ export function AuthProvider({ children }) {
   };
 
   // ---- AI interview ----
+  // In REAL mode the server (/api/interview/ai) persists the authoritative
+  // result with the service role — the browser can no longer write
+  // ai_interviews — so here we only mirror it into local UI state.
   const recordAiAttempt = async ({ score, breakdown, feedback, passed, band, suggestedTraining, status }) => {
-    if (SUPABASE_ENABLED && supabase) {
-      const id = await getUid();
-      if (id) { try { await db.recordAiAttemptRow(supabase, id, { score, breakdown, feedback, passed, band, suggestedTraining, status }); } catch { /* ignore */ } }
-    }
     setApp((prev) => ({
       ...prev,
       aiInterview: { attempts: (prev.aiInterview?.attempts ?? 0) + 1, lastScore: score, passed, breakdown, feedback, band: band ?? null, suggestedTraining: suggestedTraining ?? null, status: status ?? "released" },
     }));
   };
 
+  // Re-pull the candidate's server state (used while waiting for an
+  // interviewer's verdict to land).
+  const refreshApp = useCallback(async () => {
+    if (SUPABASE_ENABLED && supabase) { try { await bootstrapFromSupabase(); } catch { /* ignore */ } }
+  }, [supabase, bootstrapFromSupabase]);
+
   // ---- Human stages ----
-  const completeStage = async (kind, { passed, result }) => {
+  // REAL mode: Professional/HR results are decided by interviewers (see
+  // /api/interviewer/verdict); the candidate side is passive, so this just
+  // refreshes to pick up a submitted verdict. DEMO mode: computed locally so
+  // the pipeline is still demoable end-to-end. Returns { result, passed }.
+  const completeStage = async (kind) => {
     if (SUPABASE_ENABLED && supabase) {
-      const id = await getUid();
-      if (id) { try { await db.completeStageRow(supabase, id, kind, { passed, result }); } catch { /* ignore */ } }
+      await refreshApp();
+      const s = app.stages?.[kind];
+      return s?.result ? { result: s.result, passed: s.passed } : { pending: true };
     }
+    // demo
+    const attemptNo = (app.stages?.[kind]?.attempts ?? 0) + 1;
+    const result = computeStageResult(kind, attemptNo);
     setApp((prev) => {
       const s = prev.stages?.[kind] || { attempts: 0 };
-      return { ...prev, stages: { ...prev.stages, [kind]: { attempts: (s.attempts ?? 0) + 1, passed, result, completedAt: new Date().toISOString() } } };
+      return { ...prev, stages: { ...prev.stages, [kind]: { attempts: (s.attempts ?? 0) + 1, passed: result.passed, result, completedAt: new Date().toISOString() } } };
     });
+    return { result, passed: result.passed };
   };
 
   const retryStage = async (kind) => {
     if (SUPABASE_ENABLED && supabase) {
-      const id = await getUid();
-      if (id) {
-        const { ok } = await db.retryStageTxn(supabase, id, kind);
-        if (!ok) return false;
+      try {
+        const res = await fetch("/api/interview/retry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
+        const data = await res.json();
+        if (!res.ok) return false;
         setApp((prev) => ({
           ...prev,
-          tokens: prev.tokens - 1,
+          tokens: data.tokens ?? prev.tokens,
           stages: { ...prev.stages, [kind]: { ...prev.stages[kind], passed: false, result: null } },
           interviews: prev.interviews.filter((i) => i.type !== kind),
         }));
         return true;
-      }
+      } catch { return false; }
     }
     let ok = false;
     setApp((prev) => {
@@ -437,7 +452,7 @@ export function AuthProvider({ children }) {
       value={{
         signup, updateSignup, user, role, login, loginDemo, signUpUser, verifyEmailOtp, resendConfirmation, completeSignup, logout, hydrated,
         app, uploadCv, clearCv, scheduleInterview, addLocalInterviews, cancelInterview, recordAiAttempt, completeStage, retryStage,
-        unlockTraining, toggleSaveTraining, viewAs, interviewerKind, approvalStatus, uploadStaffDoc,
+        unlockTraining, toggleSaveTraining, viewAs, interviewerKind, approvalStatus, uploadStaffDoc, refreshApp,
         enterInterviewer, exitInterviewer, enterRecruiter, enterAdmin, exitPortal, addInterviewerNote, recordAiFinal,
         supabaseEnabled: SUPABASE_ENABLED,
       }}

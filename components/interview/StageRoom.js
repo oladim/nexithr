@@ -45,7 +45,7 @@ const AGENDA = {
 };
 
 export default function StageRoom({ kind }) {
-  const { app, signup, user, completeStage, retryStage } = useAuth();
+  const { app, signup, user, completeStage, retryStage, supabaseEnabled, refreshApp } = useAuth();
   const meta = STAGE_META[kind];
   const stage = app.stages?.[kind] || { attempts: 0, passed: false, result: null };
   const role = ROLE_LABELS[signup.targetRole] || "Front End Development";
@@ -59,14 +59,32 @@ export default function StageRoom({ kind }) {
   const scheduled = app.interviews.find((i) => i.type === kind);
 
   // ---- view state ----
+  // REAL mode: once booked, the candidate joins the Meet and waits for the
+  // interviewer's verdict ("awaiting"). DEMO mode: the simulated live call.
   const derive = () => {
     if (!prevPassed) return "locked";
     if (stage.result) return "result";
-    if (scheduled) return "waiting";
+    if (scheduled) return supabaseEnabled ? "awaiting" : "waiting";
     return "needSchedule";
   };
   const [view, setView] = useState(derive);
   const [result, setResult] = useState(stage.result || null);
+
+  // Real mode: when the interviewer's verdict lands in our refreshed state,
+  // show it. Also poll periodically while awaiting.
+  useEffect(() => {
+    if (supabaseEnabled && stage.result && view !== "result") {
+      setResult(stage.result);
+      setView("result");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage.result]);
+
+  useEffect(() => {
+    if (!(supabaseEnabled && view === "awaiting" && refreshApp)) return;
+    const t = setInterval(() => refreshApp(), 20000);
+    return () => clearInterval(t);
+  }, [supabaseEnabled, view, refreshApp]);
 
   // ---- media (self-view for the device check + live call) ----
   const streamRef = useRef(null);
@@ -152,16 +170,18 @@ export default function StageRoom({ kind }) {
     stopMedia();
     setView("processing");
     const attemptNo = (stage.attempts ?? 0) + 1;
-    const r = computeStageResult(kind, attemptNo);
-    setTimeout(() => {
-      completeStage(kind, { passed: r.passed, result: r });
+    setTimeout(async () => {
+      // The server computes and records the verdict (real mode); demo computes
+      // locally. We display whatever the authoritative source returns.
+      const out = await completeStage(kind);
+      const r = out?.result || computeStageResult(kind, attemptNo);
       setResult(r);
       setView("result");
     }, 2600);
   };
 
-  const doRetry = () => {
-    const ok = retryStage(kind);
+  const doRetry = async () => {
+    const ok = await retryStage(kind);
     if (ok) {
       setResult(null);
       setView("needSchedule");
@@ -214,10 +234,40 @@ export default function StageRoom({ kind }) {
             <Link href="/dashboard/interview" className="btn-solid">
               <IconCalendar width={15} height={15} /> Schedule a time
             </Link>
-            <button className="btn-outline" onClick={join}>
-              <IconPlay width={14} height={14} /> Join a demo session now
+            {!supabaseEnabled && (
+              <button className="btn-outline" onClick={join}>
+                <IconPlay width={14} height={14} /> Join a demo session now
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AWAITING INTERVIEWER VERDICT (real mode) */}
+      {view === "awaiting" && (
+        <div className="stage-schedule card pad">
+          <span className="ss-ic"><IconClock width={24} height={24} /></span>
+          <h3>Your {meta.label} is booked</h3>
+          <p>
+            {scheduled ? <>Scheduled for <b>{scheduled.date}, {scheduled.time}</b>. </> : null}
+            Join the call at your scheduled time. After the interview, your {meta.panel.length > 1 ? "panel" : "interviewer"} submits a verdict and your result appears here automatically.
+          </p>
+          <div className="ss-actions">
+            {scheduled?.meetLink ? (
+              <a href={scheduled.meetLink} target="_blank" rel="noreferrer" className="btn-solid">
+                <IconVideo width={15} height={15} /> Join on Google Meet
+              </a>
+            ) : (
+              <Link href="/dashboard/interview" className="btn-solid"><IconCalendar width={15} height={15} /> View booking</Link>
+            )}
+            <button className="btn-outline" onClick={() => refreshApp?.()}>
+              <IconRefresh width={14} height={14} /> Check for result
             </button>
           </div>
+          <p className="li-note" style={{ marginTop: 14 }}>
+            <IconChart width={14} height={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+            You&apos;ll be notified in-app and by email as soon as the verdict is in.
+          </p>
         </div>
       )}
 

@@ -174,6 +174,7 @@ export default function AiInterviewPage() {
 
   // interview engine
   const [mode, setMode] = useState(null); // "ai" | "demo"
+  const [blockedStart, setBlockedStart] = useState(false); // server-enforced retake cooldown
   const [phase, setPhase] = useState("loading"); // loading | speaking | listening | thinking
   const [aiText, setAiText] = useState(""); // current interviewer turn (spoken)
   const [liveText, setLiveText] = useState(""); // candidate's words as they speak
@@ -485,6 +486,16 @@ export default function AiInterviewPage() {
       data = { mode: "demo", reason: "network" };
     }
 
+    if (data?.blocked) {
+      // Server enforced the retake cooldown — return to the lock screen.
+      try { window.speechSynthesis?.cancel(); } catch {}
+      teardownVoice();
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      stopMedia();
+      setBlockedStart(true);
+      setStep("consent");
+      return;
+    }
     if (data?.mode === "ai" && data.opening) {
       setMode("ai");
       sessionIdRef.current = data.sessionId || null;
@@ -641,7 +652,7 @@ export default function AiInterviewPage() {
   /* =============================== render =============================== */
 
   // ---- Retake cooldown lock (unless subscribed) ----
-  if (step === "consent" && retakeLocked) {
+  if (step === "consent" && (retakeLocked || blockedStart)) {
     return (
       <>
         <div className="page-head">
