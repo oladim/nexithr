@@ -99,7 +99,7 @@ function HeroSpotlights() {
   useEffect(() => {
     (async () => {
       try {
-        const d = await (await fetch("/api/landing/spotlights")).json();
+        const d = await (await fetch("/api/landing/spotlights", { cache: "no-store" })).json();
         if (Array.isArray(d.spotlights) && d.spotlights.length) setItems(d.spotlights);
       } catch { /* ignore */ }
     })();

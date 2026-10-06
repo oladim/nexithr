@@ -4,6 +4,8 @@ import { loadSettings, DEFAULT_SETTINGS } from "@/lib/db";
 import { paystackMode } from "@/lib/paystack";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // GET /api/settings — public, non-sensitive config the candidate UI needs:
 // pass marks, pricing, enabled roles. Falls back to defaults in demo mode.

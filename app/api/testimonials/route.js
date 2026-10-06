@@ -3,6 +3,8 @@ import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadTestimonials } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // GET /api/testimonials — published graduate outcomes (public).
 export async function GET() {

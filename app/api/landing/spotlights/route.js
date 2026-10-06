@@ -3,6 +3,10 @@ import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings, DEFAULT_SPOTLIGHTS } from "@/lib/db";
 
 export const runtime = "nodejs";
+// Always read live from the database — never serve a build-time snapshot, so
+// admin edits to spotlights show up immediately.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // GET /api/landing/spotlights — public. The hero's scrolling spotlights
 // (enabled, ordered, limited by the admin "how many" setting). Falls back to
