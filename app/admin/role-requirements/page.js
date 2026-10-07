@@ -21,12 +21,27 @@ export default function RoleRequirements() {
   const [adding, setAdding] = useState(false);
 
   const sb = () => getBrowserSupabase();
+  const [waitlist, setWaitlist] = useState(null); // { total, interests }
+  const [note, setNote] = useState("");
+  const [wasOpen, setWasOpen] = useState({}); // role_key -> enabled as last saved
+
+  // Tell waitlisted candidates (registered without an open role) a role opened.
+  const announce = async (roleKey, title) => {
+    if (!supabaseEnabled) return;
+    try {
+      const res = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ roleKey }) });
+      const data = await res.json();
+      if (res.ok && data.notified > 0) { setNote(`${title} is open — ${data.notified} waitlisted candidate${data.notified === 1 ? "" : "s"} notified.`); setTimeout(() => setNote(""), 7000); }
+    } catch { /* best-effort */ }
+  };
 
   useEffect(() => {
     if (!supabaseEnabled) return;
     (async () => {
       const { list } = await loadRoleRequirements(sb());
       setReqs(list.length ? list : DEFAULT_REQS);
+      setWasOpen(Object.fromEntries(list.map((r) => [r.role_key, r.enabled !== false])));
+      try { const r = await fetch("/api/admin/roles", { cache: "no-store" }); if (r.ok) setWaitlist(await r.json()); } catch { /* ignore */ }
     })();
   }, [supabaseEnabled]);
 
@@ -51,6 +66,8 @@ export default function RoleRequirements() {
       if (error) { setErr(error.message); setBusyKey(null); return; }
     }
     setReqs((rs) => rs.map((x) => (x.role_key === r.role_key ? { ...x, ...payload } : x)));
+    if (payload.enabled && wasOpen[r.role_key] === false) announce(r.role_key, payload.title); // just re-opened
+    setWasOpen((m) => ({ ...m, [r.role_key]: payload.enabled }));
     setBusyKey(null); flash(r.role_key);
   };
 
@@ -81,6 +98,8 @@ export default function RoleRequirements() {
       if (error) { setErr(error.message); setBusyKey(null); return; }
     }
     setReqs((rs) => [...rs, row]);
+    setWasOpen((m) => ({ ...m, [key]: true }));
+    announce(key, title); // a new role is open by default
     setBusyKey(null); setAdding(false); flash(key);
   };
 
@@ -97,6 +116,19 @@ export default function RoleRequirements() {
       </div>
 
       {err && <div className="auth-error" style={{ maxWidth: 640 }}>{err}</div>}
+      {note && <div className="role-note ok">{note}</div>}
+
+      {waitlist && waitlist.total > 0 && (
+        <div className="card pad" style={{ marginBottom: 18, maxWidth: 760 }}>
+          <h3 className="card-title" style={{ marginBottom: 6 }}>Waitlist — {waitlist.total} candidate{waitlist.total === 1 ? "" : "s"} waiting for a position</h3>
+          <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 10px" }}>
+            These candidates registered for a field that isn&apos;t open yet. They&apos;re notified automatically whenever you add or re-open a role.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {waitlist.interests.map((i) => <span key={i.role} className="cvr-skill have">{i.role} · {i.count}</span>)}
+          </div>
+        </div>
+      )}
 
       {adding && <NewRoleForm busy={busyKey === "__new__"} onCancel={() => setAdding(false)} onCreate={create} />}
 

@@ -117,6 +117,18 @@ export default function DashboardHome() {
         </div>
       </div>
 
+      {/* Certificate — unlocked once every stage is passed */}
+      {app.aiInterview?.passed && app.stages?.Professional?.passed && app.stages?.HR?.passed && (
+        <div className="card pad" style={{ marginBottom: 18, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, background: "linear-gradient(120deg,#070a14,#12204a)", color: "#fff", border: 0 }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".16em", color: "#8fbcff" }}>N|VP · NEXIT VERIFIED PROFESSIONAL</div>
+            <h3 style={{ margin: "6px 0 4px", fontSize: 19, color: "#fff" }}>Congratulations — your certificate is ready</h3>
+            <p style={{ margin: 0, fontSize: 14, color: "#c5cee2" }}>You&apos;ve passed all three stages. Print your certificate and add N|VP to your title.</p>
+          </div>
+          <Link href="/dashboard/certificate" className="btn-solid">View &amp; print certificate</Link>
+        </div>
+      )}
+
       {/* CV status / upload prompt */}
       <div className="cv-banner">
         {hasCv ? (

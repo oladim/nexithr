@@ -18,6 +18,7 @@ import {
   IconMenu,
   IconChevronRight,
   IconBriefcase,
+  IconStar,
 } from "@/components/Icons";
 
 const NAV = [
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/dashboard/interview", label: "Interview", Icon: IconCalendar },
   { href: "/dashboard/training", label: "Training", Icon: IconCap },
   { href: "/dashboard/jobs", label: "Job Board", Icon: IconBriefcase },
+  { href: "/dashboard/certificate", label: "Certificate", Icon: IconStar },
   { href: "/dashboard/profile", label: "Profile", Icon: IconUser },
   { href: "/dashboard/settings", label: "Settings", Icon: IconGear },
 ];

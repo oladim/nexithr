@@ -112,7 +112,9 @@ function friendlyStartError(reason) {
 
 export default function AiInterviewPage() {
   const router = useRouter();
-  const { signup, app, recordAiAttempt, unlockTraining, supabaseEnabled } = useAuth();
+  const { signup, app, recordAiAttempt, unlockTraining, supabaseEnabled, refreshApp } = useAuth();
+  // Pick up a CV approval (or rejection) made since this tab loaded.
+  useEffect(() => { if (supabaseEnabled) refreshApp?.(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [supabaseEnabled]);
 
   // Configurable thresholds + candidate access (subscription / retake cooldown).
   const [passMark, setPassMark] = useState(AI_PASS_MARK); // "ready" band threshold
@@ -175,6 +177,8 @@ export default function AiInterviewPage() {
   // interview engine
   const [mode, setMode] = useState(null); // "ai" | "demo"
   const [blockedStart, setBlockedStart] = useState(false); // server-enforced retake cooldown
+  const [preBlock, setPreBlock] = useState(""); // prerequisite reason from the server
+  const [preNote, setPreNote] = useState(""); // reviewer's note when the CV was rejected
   const [phase, setPhase] = useState("loading"); // loading | speaking | listening | thinking
   const [aiText, setAiText] = useState(""); // current interviewer turn (spoken)
   const [liveText, setLiveText] = useState(""); // candidate's words as they speak
@@ -492,7 +496,8 @@ export default function AiInterviewPage() {
       teardownVoice();
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       stopMedia();
-      setBlockedStart(true);
+      if (["no-cv", "no-role", "cv-pending", "cv-rejected", "cv-changes"].includes(data.reason)) { setPreBlock(data.reason); setPreNote(data.note || ""); }
+      else setBlockedStart(true);
       setStep("consent");
       return;
     }
@@ -650,6 +655,84 @@ export default function AiInterviewPage() {
   };
 
   /* =============================== render =============================== */
+
+  // ---- An APPROVED CV (and a target role) is required before the AI interview ----
+  // Demo mode has no reviewer, so there only "a CV exists" is required.
+  const cvStatus = app.cv?.status || "";
+  const gate =
+    !app.cv || preBlock === "no-cv" ? "no-cv"
+    : supabaseEnabled && (preBlock === "cv-rejected" || cvStatus === "Rejected") ? "cv-rejected"
+    : supabaseEnabled && (preBlock === "cv-changes" || cvStatus === "Changes requested") ? "cv-changes"
+    : supabaseEnabled && (preBlock === "cv-pending" || (cvStatus && cvStatus !== "Approved")) ? "cv-pending"
+    : supabaseEnabled && (preBlock === "no-role" || (app.candidate && !app.candidate.target_role)) ? "no-role"
+    : "";
+  if (step === "consent" && gate) {
+    const note = preNote || app.cv?.reviewNote || "";
+    const G = {
+      "no-cv": {
+        h1: "upload your CV first", sub: "Your AI interview is built from your CV and your target role, so it can't start until a CV is uploaded and approved.",
+        h3: "No CV on file", msg: "Upload your CV (PDF or DOCX, up to 5MB). Our team reviews it, and once it's approved you can start the AI interview.",
+        href: "/dashboard/cv-upload", btn: "Upload my CV",
+      },
+      "cv-pending": {
+        h1: "your CV is being reviewed", sub: "Your CV must be approved before the AI interview can start.",
+        h3: "CV awaiting approval", msg: "Thanks for uploading your CV. Our team is reviewing it — you'll get a notification and an email as soon as it's approved, and the AI interview will unlock automatically.",
+        href: "/dashboard/cv-upload", btn: "View my CV",
+      },
+      "cv-rejected": {
+        h1: "your CV was not approved", sub: "Your CV must be approved before the AI interview can start.",
+        h3: "CV rejected", msg: "Your CV wasn't approved this time. Please read the reviewer's reason below, update your CV and upload it again.",
+        href: "/dashboard/cv-upload", btn: "Upload a new CV",
+      },
+      "cv-changes": {
+        h1: "your CV needs changes", sub: "Your CV must be approved before the AI interview can start.",
+        h3: "Changes requested", msg: "Our reviewer has asked for some changes to your CV. Please read the note below, update your CV and upload it again.",
+        href: "/dashboard/cv-upload", btn: "Upload an updated CV",
+      },
+      "no-role": {
+        h1: "choose your target role first", sub: "Your AI interview is built around your target role. Pick one from your profile to continue.",
+        h3: "No target role selected", msg: "Choose one of the roles currently open on NexIT-Africa. If your field isn't open yet, we'll notify you when it becomes available.",
+        href: "/dashboard/profile", btn: "Choose a target role",
+      },
+    }[gate];
+    const showNote = (gate === "cv-rejected" || gate === "cv-changes");
+    const cvOk = !!app.cv && gate === "no-role";
+    return (
+      <>
+        <div className="page-head">
+          <h1>AI Interview — {G.h1}</h1>
+          <p>{G.sub}</p>
+        </div>
+        <div className="consent-grid">
+          <div className="consent-notice">
+            <h3>{G.h3}</h3>
+            <div className="consent-warn">
+              {gate === "cv-pending" ? <IconClock /> : <IconLock />}
+              <span>{G.msg}</span>
+            </div>
+            {showNote && (
+              <div className="cv-review-note warn" style={{ marginTop: 14 }}>
+                <b>{gate === "cv-rejected" ? "Why your CV was rejected" : "What to change"}</b>
+                <p>{note || "No reason was recorded. Please contact support@nexitafrica.com."}</p>
+              </div>
+            )}
+            <div className="assess-actions">
+              <Link href="/dashboard/interview" className="btn-outline">Back to interviews</Link>
+              <Link href={G.href} className="btn-solid">{G.btn} <IconChevronRight width={16} height={16} /></Link>
+            </div>
+          </div>
+          <div className="device-card">
+            <h4>Before the AI interview</h4>
+            <div className="device-status" style={{ flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+              <span className="d"><i /> 1. Upload your CV{app.cv && gate !== "no-cv" ? " — done" : ""}</span>
+              <span className="d"><i /> 2. CV approved by NexIT{cvOk ? " — done" : gate === "cv-pending" ? " — in review" : ""}</span>
+              <span className="d"><i /> 3. Take the AI interview</span>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   // ---- Retake cooldown lock (unless subscribed) ----
   if (step === "consent" && (retakeLocked || blockedStart)) {

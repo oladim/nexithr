@@ -176,6 +176,26 @@ async function retakeBlock(me) {
   return null;
 }
 
+// A candidate must have an APPROVED CV (and a target role) before the AI
+// interview can start — the interview is built from both, and an admin must
+// have reviewed and approved the latest CV first.
+async function prerequisiteBlock(me) {
+  const admin = getServiceSupabase();
+  if (!admin || !me || me.role !== "candidate") return null;
+  try {
+    const [{ data: cv }, { data: cand }] = await Promise.all([
+      admin.from("cvs").select("id, status, review_note").eq("candidate_id", me.id).order("uploaded_at", { ascending: false }).limit(1).maybeSingle(),
+      admin.from("candidates").select("target_role").eq("id", me.id).maybeSingle(),
+    ]);
+    if (!cv) return { blocked: true, reason: "no-cv" };
+    if (cv.status === "Rejected") return { blocked: true, reason: "cv-rejected", note: cv.review_note || "" };
+    if (cv.status === "Changes requested") return { blocked: true, reason: "cv-changes", note: cv.review_note || "" };
+    if (cv.status !== "Approved") return { blocked: true, reason: "cv-pending" };
+    if (!cand?.target_role) return { blocked: true, reason: "no-role" };
+  } catch { /* fail open — the client gate still applies */ }
+  return null;
+}
+
 // Clean the transcript into Anthropic's alternating user/assistant shape.
 function sanitizeMessages(raw) {
   const msgs = (Array.isArray(raw) ? raw : [])
@@ -223,6 +243,13 @@ export async function POST(request) {
   let body;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
   const action = body?.action;
+
+  // CV + target role are required before any interview (real or demo) starts.
+  if (action === "start") {
+    const mePre = await getSessionProfile().catch(() => null);
+    const pre = await prerequisiteBlock(mePre);
+    if (pre) return NextResponse.json(pre);
+  }
 
   // No key → tell the client to run the built-in demo interview.
   if (!anthropicEnabled()) {

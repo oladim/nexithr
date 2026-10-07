@@ -15,6 +15,10 @@ const FAQS = [
     a: "It's a real, voice-based conversation with an AI interviewer that adapts to your answers. It scores five competencies, gives you an honest readiness band, and generates a personalised plan of technical and professional skills to work on.",
   },
   {
+    q: "What is N|VP and how do I earn it?",
+    a: "N|VP stands for NexIT Verified Professional. You earn it by passing all three stages — the AI interview, the Professional interview and the HR interview. You can then print your certificate from your dashboard and add N|VP after your name on your CV, LinkedIn and email signature. Each certificate has a unique number and QR code that anyone can check at nexitafrica.com/verify.",
+  },
+  {
     q: "Is there a free trial?",
     a: "Yes. You get 3 free AI interview attempts. After that you can keep going with an annual subscription (which unlocks unlimited retakes and suggested training), or wait out the one-month retake window between free attempts.",
   },

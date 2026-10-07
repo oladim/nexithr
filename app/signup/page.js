@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthLayout from "@/components/auth/AuthLayout";
@@ -294,38 +294,96 @@ function StepProfessional({ data, update, onNext, onBack }) {
 }
 
 /* ---------- Step 3 — Target job (interpretation) ---------- */
+const ROLE_ICONS = { software: IconCode, data: IconChart, product: IconUser, cloud: IconBriefcase, security: IconLock, support: IconBriefcase };
+const OTHER = "__other__";
+
 function StepTargetJob({ data, update, onNext, onBack }) {
+  const { supabaseEnabled } = useAuth();
+  // Only roles an admin has opened for applications are offered. Demo mode
+  // (no backend) falls back to the built-in list.
+  const [roles, setRoles] = useState(supabaseEnabled ? null : JOB_FIELDS);
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    let live = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/roles", { cache: "no-store" });
+        const json = await res.json();
+        if (!live) return;
+        if (Array.isArray(json.roles)) {
+          setRoles(json.roles.map((r) => ({ id: r.key, label: r.title, desc: r.description || "Open for applications", Icon: ROLE_ICONS[r.key] || IconBriefcase })));
+        } else setRoles(JOB_FIELDS);
+      } catch { if (live) setRoles(JOB_FIELDS); }
+    })();
+    return () => { live = false; };
+  }, [supabaseEnabled]);
+
+  const other = data.roleNotListed === true;
+  const canNext = other ? !!(data.interestedRole || "").trim() : !!data.targetRole;
   const submit = (e) => {
     e.preventDefault();
-    if (!data.targetRole) return;
+    if (!canNext) return;
     onNext();
   };
   return (
     <>
       <h1 className="auth-title">Choose a target</h1>
       <p className="auth-subtitle">
-        Pick the field you want to be assessed and matched for. You can change
-        this later.
+        Pick the field you want to be assessed and matched for. These are the
+        positions currently open on NexIT-Africa.
       </p>
       <form onSubmit={submit}>
-        <div className="job-grid" style={{ marginBottom: 24 }}>
-          {JOB_FIELDS.map(({ id, label, desc, Icon }) => (
+        {roles === null ? (
+          <p style={{ color: "var(--gray-500)", fontSize: 14, marginBottom: 24 }}>Loading open positions…</p>
+        ) : (
+          <div className="job-grid" style={{ marginBottom: 16 }}>
+            {roles.map(({ id, label, desc, Icon }) => (
+              <button
+                type="button"
+                key={id}
+                className={`job-card ${!other && data.targetRole === id ? "selected" : ""}`}
+                onClick={() => update({ targetRole: id, targetRoleLabel: label, roleNotListed: false })}
+              >
+                <span className="jc-icon">
+                  <Icon width={20} height={20} />
+                </span>
+                <span>
+                  <h4>{label}</h4>
+                  <p>{desc}</p>
+                </span>
+              </button>
+            ))}
             <button
               type="button"
-              key={id}
-              className={`job-card ${data.targetRole === id ? "selected" : ""}`}
-              onClick={() => update({ targetRole: id })}
+              key={OTHER}
+              className={`job-card ${other ? "selected" : ""}`}
+              onClick={() => update({ targetRole: "", roleNotListed: true })}
             >
               <span className="jc-icon">
-                <Icon width={20} height={20} />
+                <IconUser width={20} height={20} />
               </span>
               <span>
-                <h4>{label}</h4>
-                <p>{desc}</p>
+                <h4>My field isn&apos;t listed</h4>
+                <p>Register now — we&apos;ll notify you when it opens</p>
               </span>
             </button>
-          ))}
+          </div>
+        )}
+
+        {other && (
+          <TextField
+            label="Which position are you interested in?"
+            placeholder="e.g. Mobile Development, QA Engineering"
+            value={data.interestedRole || ""}
+            onChange={(e) => update({ interestedRole: e.target.value })}
+          />
+        )}
+
+        <div className="role-note" style={{ margin: "4px 0 20px", fontSize: 13.5, lineHeight: 1.55, background: "rgba(0,123,255,.07)", border: "1px solid rgba(0,123,255,.25)", color: "#1c3f73", maxWidth: "none" }}>
+          <b>More positions are opening soon.</b> If yours isn&apos;t listed yet, you can still complete your
+          registration — we&apos;ll notify you by email as soon as other positions become available.
         </div>
+
         <SelectField
           label="Preferred job type"
           value={data.jobType}
@@ -341,7 +399,7 @@ function StepTargetJob({ data, update, onNext, onBack }) {
           <button type="button" className="auth-btn ghost" onClick={onBack}>
             Back
           </button>
-          <button type="submit" className="auth-btn" disabled={!data.targetRole}>
+          <button type="submit" className="auth-btn" disabled={!canNext}>
             Next
           </button>
         </div>
@@ -410,7 +468,7 @@ function StepReview({ data, role, onBack, onFinish, error, busy }) {
   const extra = role === "recruiter"
     ? [["Organisation", data.orgName || "—"], ["Your role", data.jobTitle || "—"]]
     : role === "candidate"
-    ? [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"], ["Target field", JOB_FIELDS.find((j) => j.id === data.targetRole)?.label || "—"], ["Job type", data.jobType], ["CV", data.cvName || "—"]]
+    ? [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"], ["Target field", data.roleNotListed ? `${data.interestedRole || "Not listed"} — we'll notify you when it opens` : JOB_FIELDS.find((j) => j.id === data.targetRole)?.label || data.targetRoleLabel || data.targetRole || "—"], ["Job type", data.jobType], ["CV", data.cvName || "—"]]
     : [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"]];
   const rows = [...base, ...extra];
   return (

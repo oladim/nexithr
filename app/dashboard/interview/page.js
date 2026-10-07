@@ -75,8 +75,8 @@ export default function InterviewPage() {
   const reasonFor = (id) =>
     id === "Professional" ? "Pass the AI interview first" : id === "HR" ? "Pass the Professional interview first" : "Pass the AI interview first";
 
-  const interviewerFor = (id) =>
-    id === "HR" ? panel.HR || "To be assigned" : id === "Combined" ? `${panel.Professional || "TBA"} & ${panel.HR || "TBA"}` : panel.Professional || "To be assigned";
+  // Interviewers are assigned by NexIT after the booking is made.
+  const interviewerFor = () => "Assigned by NexIT after booking";
 
   const role = ROLE_LABELS[app.candidate?.target_role] || ROLE_LABELS[signup.targetRole] || signup.jobTitle || "Your selected role";
   const chosen = TYPES.find((t) => t.id === typeId);
@@ -274,8 +274,8 @@ export default function InterviewPage() {
               <a href={booked.meetLink} target="_blank" rel="noreferrer" style={{ fontWeight: 600, wordBreak: "break-all" }}>{booked.meetLink}</a>
               <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--gray-500)" }}>
                 {booked.mock
-                  ? "Demo link (Google Workspace not configured). With Google set up, the real Meet invite is added to the interviewers' calendars automatically."
-                  : "Invites have been sent — this call is on the interviewers' calendars."}
+                  ? "Demo link (Google Workspace not configured). An admin assigns your interviewer after booking."
+                  : "Your booking is confirmed. We'll assign your interviewer and notify you — they'll join on this link."}
               </p>
             </div>
           </div>
@@ -303,7 +303,7 @@ export default function InterviewPage() {
                     </span>
                     <div className="si">
                       <h4>{isCombined ? "Professional + HR" : `${it.type} Interview`} · {it.role}</h4>
-                      <p>{it.date}, {it.time} · {it.mode}{it.interviewer ? ` · ${it.interviewer}` : ""}</p>
+                      <p>{it.date}, {it.time} · {it.mode} · {it.interviewer || (it.assigned ? "Interviewer assigned" : "Awaiting interviewer assignment")}</p>
                       {it.meetLink && (
                         <a href={it.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
                           <IconVideo width={13} height={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} /> Join Google Meet

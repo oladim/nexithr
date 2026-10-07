@@ -1,0 +1,78 @@
+/* NexIT Verified Professional (N|VP) certificate — A4 landscape.
+   Everything is scoped under .nxc so it can't leak into the app's styles. */
+@font-face{font-family:'NXC Open Sans';font-weight:400;font-style:normal;font-display:block;src:url(/fonts/open-sans-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'NXC Open Sans';font-weight:600;font-style:normal;font-display:block;src:url(/fonts/open-sans-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'NXC Open Sans';font-weight:700;font-style:normal;font-display:block;src:url(/fonts/open-sans-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'NXC Open Sans';font-weight:800;font-style:normal;font-display:block;src:url(/fonts/open-sans-latin-800-normal.woff2) format('woff2')}
+
+.nxc-fit{width:100%;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 18px 50px rgba(8,12,28,.28)}
+.nxc-fit .nxc{position:absolute;left:0;top:0;transform-origin:0 0}
+.nxc,.nxc *{margin:0;padding:0;box-sizing:border-box}
+.nxc{--ink:#f4f7ff;--muted:#d0d7e8;--dim:#aab4cb;--blue:#5fa8ff;--violet:#a78bfa;--teal:#34d3c0;--green:#3ddc97;--line:rgba(255,255,255,.11);--panel:rgba(255,255,255,.04);
+  font-family:'NXC Open Sans','Open Sans',Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:normal;text-align:left}
+.nxc{width:297mm;height:210mm;margin:0 auto;position:relative;overflow:hidden;color:var(--ink);background:
+  radial-gradient(58% 55% at 8% 0%, rgba(59,130,246,.30), transparent 62%),
+  radial-gradient(48% 55% at 100% 30%, rgba(139,92,246,.24), transparent 62%),
+  radial-gradient(55% 50% at 70% 112%, rgba(20,184,166,.18), transparent 62%),
+  #070a14}
+.nxc .x-dots{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1.5px);background-size:22px 22px;opacity:.55}
+.nxc .x-ghost{position:absolute;right:28mm;bottom:-58mm;font-weight:800;font-size:520px;line-height:1;color:#fff;opacity:.028}
+.nxc .x-framesvg{position:absolute;inset:0;width:100%;height:100%}
+.nxc .x-pad{position:absolute;left:19mm;right:19mm;top:17mm;bottom:15mm}
+.nxc .x-topbar{display:flex;justify-content:space-between;align-items:flex-start}
+.nxc .x-brand{display:flex;align-items:center;gap:12px}
+.nxc .x-brand .x-mk{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#8b5cf6 60%,#14b8a6);display:flex;align-items:center;justify-content:center}
+.nxc .x-brand .x-mk svg{width:20px;height:25px}
+.nxc .x-brand .x-nm{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.nxc .x-vpill{display:inline-flex;align-items:center;gap:9px;font-size:10.5px;font-weight:600;letter-spacing:.24em;color:#cfe6ff;border:1px solid rgba(95,168,255,.4);background:rgba(59,130,246,.12);padding:8px 15px;border-radius:999px}
+.nxc .x-vpill .x-dot{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+.nxc .x-idline{font-size:11.5px;color:var(--dim);text-align:right;margin-top:9px;letter-spacing:.06em}
+.nxc .x-idline b{color:#fff;font-weight:700;font-size:13px}
+.nxc .x-hero{position:absolute;left:0;top:35mm;width:158mm}
+.nxc .x-kicker{font-size:18px;font-weight:400;color:#e6ecfa}
+.nxc .x-name{font-weight:800;font-size:58px;line-height:1.06;letter-spacing:-.025em;margin-top:8px;color:#fff}
+.nxc .x-rule{width:72px;height:4px;border-radius:3px;background:linear-gradient(90deg,#5fa8ff,#a78bfa,#34d3c0);margin:20px 0 18px}
+.nxc .x-statement{max-width:152mm;font-size:17.5px;line-height:1.65;color:#eef2fb}
+.nxc .x-statement b{color:#fff;font-weight:800;white-space:nowrap}
+.nxc .x-ledger{position:absolute;left:0;bottom:43mm;width:158mm;display:flex;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.nxc .x-ledger .x-cell{flex:1 1 auto;padding:13px 17px;border-right:1px solid var(--line)}
+.nxc .x-ledger .x-cell:last-child{border-right:0}
+.nxc .x-ledger .x-lab{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#c5cee2;font-weight:600}
+.nxc .x-ledger .x-val{font-size:19px;font-weight:800;margin-top:6px;color:#fff;display:flex;align-items:center;gap:7px}
+.nxc .x-ledger .x-val .x-ck{width:20px;height:20px;border-radius:50%;background:var(--green);color:#04140c;font-weight:800;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+.nxc .x-seal{position:absolute;right:3mm;top:27mm;width:84mm;height:84mm;display:flex;align-items:center;justify-content:center;transform:scale(1.22)}
+.nxc .x-ringo{position:absolute;width:55mm;height:55mm;border-radius:50%;background:conic-gradient(from 210deg,#3b82f6,#8b5cf6,#14b8a6,#5fa8ff,#3b82f6)}
+.nxc .x-ringi{position:absolute;width:51.5mm;height:51.5mm;border-radius:50%;background:#080c18}
+.nxc .x-dash{position:absolute;width:46.5mm;height:46.5mm;border-radius:50%;border:1px dashed rgba(255,255,255,.3)}
+.nxc .x-core{position:absolute;width:40mm;height:40mm;border-radius:50%;background:radial-gradient(70% 60% at 50% 22%,rgba(59,130,246,.34),transparent 72%),#0a0f1e;border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.nxc .x-core .x-cn{display:flex;align-items:stretch;gap:6px;font-weight:800;font-size:33px;line-height:.92;letter-spacing:-.02em;color:#fff}
+.nxc .x-core .x-cn i{width:2.5px;border-radius:2px;background:linear-gradient(180deg,#5fa8ff,#a78bfa,#34d3c0)}
+.nxc .x-core .x-cv{font-weight:700;font-size:11px;letter-spacing:.3em;margin-top:9px;padding-left:.3em;color:#fff}
+.nxc .x-core .x-cs{font-size:7.5px;letter-spacing:.26em;color:var(--teal);margin-top:4px;padding-left:.26em;font-weight:600}
+.nxc .x-core .x-cy{font-size:7.5px;color:#c5cee2;margin-top:6px;letter-spacing:.14em}
+.nxc .x-verify{position:absolute;right:11mm;bottom:43mm;width:68mm;display:flex;align-items:center;gap:13px;border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:10px 13px}
+.nxc .x-verify .x-box{width:58px;height:58px;border-radius:8px;background:#fff;padding:5px;flex-shrink:0}
+.nxc .x-verify .x-box img{display:block;width:100%;height:100%}
+.nxc .x-verify .x-t1{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.nxc .x-verify .x-t2{font-size:13px;color:#e6ecfa;margin-top:5px;font-weight:600}
+.nxc .x-verify .x-t3{font-size:10.5px;color:var(--muted);margin-top:3px}
+.nxc .x-foot{position:absolute;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;border-top:1px solid var(--line);padding-top:10px}
+.nxc .x-sig{justify-self:start;text-align:center}
+.nxc .x-sig img{display:block;height:98px;margin:0 auto}
+.nxc .x-fact{text-align:center}
+.nxc .x-fact.x-r{text-align:right}
+.nxc .x-fact .x-l{font-size:10.5px;font-weight:700;letter-spacing:.16em;color:#c5cee2;text-transform:uppercase}
+.nxc .x-fact .x-v{font-size:16px;font-weight:700;color:#fff;margin-top:4px}
+.nxc .x-sig .x-nm{font-size:13.5px;font-weight:700;color:#fff;margin-top:2px;white-space:nowrap}
+.nxc .x-name.x-md{font-size:48px}
+.nxc .x-name.x-sm{font-size:40px}
+
+/* ---- Print: only the certificate, edge to edge on A4 landscape ---- */
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html,body{background:#fff !important;margin:0 !important;padding:0 !important;width:297mm !important;height:210mm !important;overflow:hidden !important}
+  body *{visibility:hidden !important}
+  .nxc-fit,.nxc-fit *{visibility:visible !important}
+  .nxc-fit{position:fixed !important;left:0;top:0;width:297mm !important;height:210mm !important;border-radius:0;box-shadow:none;overflow:visible}
+  .nxc-fit .nxc{transform:none !important}
+}

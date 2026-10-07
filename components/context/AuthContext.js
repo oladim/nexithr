@@ -25,6 +25,7 @@ const emptySignup = {
   timezone: "GMT+1", password: "", agreeTerms: false,
   jobTitle: "", experience: "", skills: "",
   targetRole: "", jobType: "Full-time", cvName: "",
+  roleNotListed: false, interestedRole: "", targetRoleLabel: "",
 };
 
 const emptyApp = {
@@ -198,7 +199,8 @@ export function AuthProvider({ children }) {
             full_name: fullName,
             phone: signup.phone,
             country: signup.country,
-            target_role: signup.targetRole,
+            target_role: signup.roleNotListed ? "" : signup.targetRole,
+            interested_role: signup.roleNotListed ? (signup.interestedRole || "").trim() : "",
             experience: signup.experience,
             skills: signup.skills,
             job_type: signup.jobType,

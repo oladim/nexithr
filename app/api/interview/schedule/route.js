@@ -12,6 +12,8 @@ export const runtime = "nodejs";
 // { stages: ["Professional"] | ["HR"] | ["Professional","HR"], startISO, mode, role }
 // Enforces prerequisites, creates ONE Google Meet, and books each stage (a
 // combined booking is two rows sharing the meet link). Returns the meet link.
+// Bookings are created UNASSIGNED — an admin then assigns the Professional /
+// HR interviewer from the Interview Manager (see /api/admin/interviews).
 export async function POST(request) {
   const me = await getSessionProfile();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -47,14 +49,9 @@ export async function POST(request) {
   const { data: cand } = await admin.from("candidates").select("target_role").eq("id", me.id).maybeSingle();
   const roleLabel = body?.role || ROLE_LABELS[cand?.target_role] || cand?.target_role || "the role";
 
-  const { data: ivs } = await admin.from("interviewers").select("kind, id, profiles(email, full_name)");
-  const firstOf = (kind) => (ivs || []).find((i) => i.kind === kind && i.profiles?.email);
-  const proIv = firstOf("Professional");
-  const hrIv = firstOf("HR");
-
-  const attendeeEmails = [me.email || me.authEmail];
-  if (stages.includes("Professional") && proIv?.profiles?.email) attendeeEmails.push(proIv.profiles.email);
-  if (stages.includes("HR") && hrIv?.profiles?.email) attendeeEmails.push(hrIv.profiles.email);
+  // Interviewers are assigned by an admin after booking, so only the candidate
+  // is on the invite for now; the interviewer receives the link on assignment.
+  const attendeeEmails = [me.email || me.authEmail].filter(Boolean);
 
   // ---- Create the Meet event (shared across the booking) ----
   const start = new Date(startISO);
@@ -81,7 +78,7 @@ export async function POST(request) {
     role: roleLabel,
     scheduled_date: dateText,
     scheduled_time: timeText,
-    interviewer_id: stage === "Professional" ? proIv?.id || null : hrIv?.id || null,
+    interviewer_id: null, // assigned by an admin
     meet_link: meet.meetLink,
     calendar_event_id: meet.eventId,
     booking_group: bookingGroup,
@@ -106,32 +103,23 @@ export async function POST(request) {
     email: me.email || me.authEmail,
     name: me.full_name,
     title: `${label} scheduled`,
-    body: `Your ${label} for ${roleLabel} is booked for ${whenText}.\n\n${meetLine}`,
+    body: `Your ${label} for ${roleLabel} is booked for ${whenText}. We'll assign your interviewer and let you know.\n\n${meetLine}`,
     cta: meet.meetLink ? { label: "Join the call", url: meet.meetLink } : { label: "View your interviews", path: "/dashboard/interview" },
   });
 
-  // Interviewer(s) — one notification each for the stage(s) they're on.
-  const candName = me.full_name || "a candidate";
-  if (stages.includes("Professional") && proIv) {
-    await notifyUser(admin, {
-      userId: proIv.id,
-      email: proIv.profiles?.email,
-      name: proIv.profiles?.full_name,
-      title: `New Professional interview — ${candName}`,
-      body: `You've been scheduled for a Professional interview with ${candName} (${roleLabel}) on ${whenText}.\n\n${meetLine}`,
-      cta: meet.meetLink ? { label: "Join the call", url: meet.meetLink } : { label: "Open your dashboard", path: "/interviewer" },
-    });
-  }
-  if (stages.includes("HR") && hrIv) {
-    await notifyUser(admin, {
-      userId: hrIv.id,
-      email: hrIv.profiles?.email,
-      name: hrIv.profiles?.full_name,
-      title: `New HR interview — ${candName}`,
-      body: `You've been scheduled for an HR interview with ${candName} (${roleLabel}) on ${whenText}.\n\n${meetLine}`,
-      cta: meet.meetLink ? { label: "Join the call", url: meet.meetLink } : { label: "Open your dashboard", path: "/interviewer" },
-    });
-  }
+  // Admins — a booking is waiting for an interviewer to be assigned.
+  const candName = me.full_name || "A candidate";
+  try {
+    const { data: admins } = await admin.from("profiles").select("id, email, full_name").eq("role", "admin");
+    for (const a of admins || []) {
+      await notifyUser(admin, {
+        userId: a.id, email: a.email, name: a.full_name,
+        title: `Assign an interviewer — ${candName}`,
+        body: `${candName} booked a ${label} for ${roleLabel} on ${whenText}. Please assign ${combined ? "the Professional and HR interviewers" : `the ${stages[0]} interviewer`}.`,
+        cta: { label: "Assign interviewer", path: "/admin/interviews" },
+      });
+    }
+  } catch { /* best-effort */ }
 
   return NextResponse.json({
     ok: true,

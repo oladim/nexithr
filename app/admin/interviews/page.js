@@ -91,10 +91,12 @@ export default function AdminInterviews() {
     <>
       <div className="page-head">
         <h1>Interview Manager</h1>
-        <p>Review each candidate&apos;s interview progress. Reset any stage to let them retake — the candidate is notified in-app and by email.</p>
+        <p>Assign interviewers to booked Professional and HR interviews, review each candidate&apos;s progress, and reset any stage to let them retake.</p>
       </div>
 
       {flash && <div className="role-note ok" style={{ marginBottom: 16 }}>{flash}</div>}
+
+      <BookingAssignments supabaseEnabled={supabaseEnabled} onFlash={(m) => { setFlash(m); setTimeout(() => setFlash(""), 6000); }} />
 
       <div className="card pad">
         {rows === null ? (
@@ -240,6 +242,122 @@ function ResetPanel({ row, stage, supabaseEnabled, onClose, onDone }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Demo bookings / interviewers so the assignment panel works without a backend.
+const DEMO_BOOKINGS = [
+  { id: "b1", candidate: "Ada Obi", candidateEmail: "ada@nexit.africa", type: "HR", role: "Software Development", date: "Friday, 9 Oct 2026", time: "10:00 – 10:45", interviewerId: null, interviewer: null },
+  { id: "b2", candidate: "Musa Bello", candidateEmail: "musa@nexit.africa", type: "Professional", role: "Data & Analytics", date: "Monday, 12 Oct 2026", time: "14:00 – 14:45", interviewerId: "i1", interviewer: "Paul Tomisin" },
+];
+const DEMO_INTERVIEWERS = [
+  { id: "i1", kind: "Professional", name: "Paul Tomisin" },
+  { id: "i2", kind: "Professional", name: "Ngozi Eze" },
+  { id: "i3", kind: "HR", name: "Grace Umeh" },
+];
+
+// Booked Professional / HR interviews waiting for (or holding) an interviewer.
+function BookingAssignments({ supabaseEnabled, onFlash }) {
+  const [bookings, setBookings] = useState(supabaseEnabled ? null : DEMO_BOOKINGS);
+  const [interviewers, setInterviewers] = useState(supabaseEnabled ? [] : DEMO_INTERVIEWERS);
+  const [pick, setPick] = useState({}); // bookingId -> interviewerId
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/interviews", { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) { setErr(data.error || "Couldn't load bookings"); setBookings([]); return; }
+        setBookings(data.bookings || []); setInterviewers(data.interviewers || []);
+      } catch { setBookings([]); }
+    })();
+  }, [supabaseEnabled]);
+
+  const assign = async (b) => {
+    const interviewerId = pick[b.id];
+    if (!interviewerId) return;
+    setErr(""); setBusy(b.id);
+    const chosen = interviewers.find((i) => i.id === interviewerId);
+    if (supabaseEnabled) {
+      try {
+        const res = await fetch("/api/admin/interviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interviewId: b.id, interviewerId }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setErr(data.error || "Couldn't assign"); setBusy(null); return; }
+      } catch { setErr("Couldn't assign"); setBusy(null); return; }
+    }
+    setBookings((list) => (list || []).map((x) => (x.id === b.id ? { ...x, interviewerId, interviewer: chosen?.name || "Interviewer" } : x)));
+    setPick((p) => ({ ...p, [b.id]: "" }));
+    setBusy(null);
+    onFlash(`${chosen?.name || "Interviewer"} assigned to ${b.candidate}'s ${b.type} interview. Both have been notified.`);
+  };
+
+  const waiting = (bookings || []).filter((b) => !b.interviewerId).length;
+
+  return (
+    <div className="card pad" style={{ marginBottom: 20 }}>
+      <h3 className="card-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        Booked interviews — assign interviewers
+        {waiting > 0 && <span className="pill-status pending">{waiting} awaiting assignment</span>}
+      </h3>
+      <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 14px" }}>
+        When a candidate books a Professional or HR interview, choose who conducts it. The interviewer and the candidate are both notified with the meeting link.
+      </p>
+      {err && <div className="auth-error" style={{ marginBottom: 12 }}>{err}</div>}
+      {bookings === null ? (
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading bookings…</p>
+      ) : bookings.length === 0 ? (
+        <p style={{ color: "var(--muted)", fontSize: 14 }}>No open Professional or HR bookings right now.</p>
+      ) : (
+        <table className="tbl">
+          <thead>
+            <tr><th>Candidate</th><th>Interview</th><th>When</th><th>Interviewer</th><th>Assign</th></tr>
+          </thead>
+          <tbody>
+            {bookings.map((b) => {
+              const options = interviewers.filter((i) => i.kind === b.type);
+              return (
+                <tr key={b.id}>
+                  <td><b>{b.candidate}</b><div style={{ fontSize: 12, color: "var(--muted)" }}>{b.candidateEmail}</div></td>
+                  <td>{b.type}<div style={{ fontSize: 12, color: "var(--muted)" }}>{b.role}</div></td>
+                  <td>{b.date}<div style={{ fontSize: 12, color: "var(--muted)" }}>{b.time}</div></td>
+                  <td>
+                    {b.interviewer
+                      ? <span className="pill-status done">{b.interviewer}</span>
+                      : <span className="pill-status pending">Not assigned</span>}
+                  </td>
+                  <td>
+                    {options.length === 0 ? (
+                      <span style={{ fontSize: 12.5, color: "var(--muted)" }}>No approved {b.type} interviewers yet</span>
+                    ) : (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <select
+                          value={pick[b.id] || ""}
+                          onChange={(e) => setPick((p) => ({ ...p, [b.id]: e.target.value }))}
+                          style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line, #e2e6ee)", fontSize: 13, minWidth: 170, background: "#fff" }}
+                        >
+                          <option value="">{b.interviewer ? "Change to…" : `Choose ${b.type} interviewer`}</option>
+                          {options.filter((o) => o.id !== b.interviewerId).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                        </select>
+                        <button className="mini-btn" disabled={!pick[b.id] || busy === b.id} onClick={() => assign(b)}>
+                          {busy === b.id ? "Saving…" : b.interviewer ? "Re-assign" : "Assign"}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
-import { sendEmail } from "@/lib/email";
+import { notifyUser } from "@/lib/notify";
 
 const STATUSES = ["Approved", "Rejected", "Changes requested", "Pending review"];
 
@@ -25,33 +25,43 @@ export async function POST(request) {
     return NextResponse.json({ error: "cvId, candidateId and a valid status are required" }, { status: 400 });
   }
 
+  // A rejection (or a request for changes) must tell the candidate why.
+  const reason = String(note || "").trim();
+  if ((status === "Rejected" || status === "Changes requested") && !reason) {
+    return NextResponse.json({ error: "Add a note explaining why — the candidate sees it and needs to know what to fix." }, { status: 400 });
+  }
+
   const admin = getServiceSupabase();
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
   // 1) Update the CV row.
   const { error: upErr } = await admin
     .from("cvs")
-    .update({ status, review_note: note || null, reviewed_by: me.id, reviewed_at: new Date().toISOString() })
+    .update({ status, review_note: reason || null, reviewed_by: me.id, reviewed_at: new Date().toISOString() })
     .eq("id", cvId);
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  // 2) Look up the candidate's email + name for the notification / email.
-  const { data: prof } = await admin.from("profiles").select("email, full_name").eq("id", candidateId).single();
-
+  // 2) Tell the candidate (in-app + email), including the reviewer's reason.
   const verb =
     status === "Approved" ? "approved" : status === "Rejected" ? "rejected" : status === "Changes requested" ? "returned for changes" : "updated";
-  const title = `CV ${verb}`;
-  const body2 = note || `Your CV was ${verb}.`;
-
-  // 3) In-app notification (always).
-  await admin.from("notifications").insert({ user_id: candidateId, title, body: body2, read: false });
-
-  // 4) Email (if configured).
-  const email = await sendEmail({
-    to: prof?.email,
-    subject: `NexIT-Africa — your CV was ${verb}`,
-    text: `Hi ${prof?.full_name || "there"},\n\n${body2}\n\n— The NexIT-Africa team`,
+  const text =
+    status === "Approved"
+      ? `Your CV has been approved — you can now take your AI interview.${reason ? `\n\nReviewer note: ${reason}` : ""}`
+      : status === "Rejected"
+      ? `Your CV was not approved.\n\nReason: ${reason}\n\nPlease update your CV and upload it again — you can take the AI interview once it's approved.`
+      : status === "Changes requested"
+      ? `Your CV needs a few changes before it can be approved.\n\nWhat to change: ${reason}\n\nPlease upload the updated CV — you can take the AI interview once it's approved.`
+      : reason || "Your CV review status was updated.";
+  const res = await notifyUser(admin, {
+    userId: candidateId,
+    title: `CV ${verb}`,
+    body: text,
+    emailSubject: `NexIT-Africa — your CV was ${verb}`,
+    cta: status === "Approved"
+      ? { label: "Take the AI interview", path: "/dashboard/interview/ai" }
+      : { label: "Upload a new CV", path: "/dashboard/cv-upload" },
   });
+  const email = { sent: res.emailSent, reason: res.reason };
 
   return NextResponse.json({
     ok: true,

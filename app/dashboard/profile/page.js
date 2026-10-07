@@ -68,6 +68,18 @@ export default function ProfilePage() {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // Only roles an admin has opened for applications can be chosen.
+  const [openRoles, setOpenRoles] = useState(null); // { key: title } | null (demo / not loaded)
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    fetch("/api/roles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (Array.isArray(j.roles)) setOpenRoles(Object.fromEntries(j.roles.map((r) => [r.key, r.title]))); })
+      .catch(() => {});
+  }, [supabaseEnabled]);
+  const roleLabels = { ...(openRoles || ROLE_LABELS) };
+  if (form.targetRole && !roleLabels[form.targetRole]) roleLabels[form.targetRole] = ROLE_LABELS[form.targetRole] || form.targetRole;
+
   const save = async () => {
     setErr(""); setMsg(""); setBusy(true);
     try {
@@ -112,7 +124,7 @@ export default function ProfilePage() {
 
   const name = form.fullName || "Your name";
   const initials = name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "U";
-  const roleLabel = ROLE_LABELS[form.targetRole] || form.targetRole || "—";
+  const roleLabel = roleLabels[form.targetRole] || ROLE_LABELS[form.targetRole] || form.targetRole || "—";
   const skillChips = form.skills.split(",").map((x) => x.trim()).filter(Boolean);
 
   // Interview progress (live).
@@ -188,8 +200,10 @@ export default function ProfilePage() {
           <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h3 className="card-title" style={{ margin: 0 }}>Professional details</h3>
             <SelectField label="Target role" value={form.targetRole} onChange={set("targetRole")} editing={editing && !roleLocked}
-              options={Object.keys(ROLE_LABELS)} labels={ROLE_LABELS} placeholderOption="Select a role"
-              note={editing && roleLocked ? "Locked — your interviews have started for this role." : undefined} />
+              options={Object.keys(roleLabels)} labels={roleLabels} placeholderOption="Select a role"
+              note={editing && roleLocked ? "Locked — your interviews have started for this role."
+                : !form.targetRole ? "Only positions currently open are listed. We'll notify you when more become available."
+                : undefined} />
             <SelectField label="Experience" value={form.experience} onChange={set("experience")} editing={editing} options={EXPERIENCE} placeholderOption="Select experience" />
             <div>
               <label className="cv-step-label" style={{ marginBottom: 6 }}>Skills</label>

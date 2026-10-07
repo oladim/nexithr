@@ -2329,3 +2329,38 @@ footer::after { content: ""; position: absolute; top: -120px; right: -80px; widt
 .chip-b { bottom: 2%; right: -6%; animation: floatA 8s ease-in-out infinite; }
 @media (max-width: 1040px) { .chip-a { left: -2%; } .chip-b { right: -2%; } }
 @media (max-width: 920px) { .float-chip { display: none; } .preview-card { margin: 0 auto; } }
+
+/* =====================================================================
+   LANDING — N|VP title section
+   ===================================================================== */
+.nvp { background: radial-gradient(60% 70% at 10% 0%, rgba(59,130,246,.28), transparent 62%), radial-gradient(50% 60% at 100% 40%, rgba(139,92,246,.22), transparent 62%), #070a14; color: #f4f7ff; padding: 96px 24px; }
+.nvp-inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1.15fr .85fr; gap: 64px; align-items: center; }
+.nvp-eyebrow { color: #8fbcff; }
+.nvp h2 { font-size: clamp(30px, 4vw, 46px); line-height: 1.12; font-weight: 700; letter-spacing: -.02em; color: #fff; margin: 0 0 18px; }
+.nvp-mark { display: inline-flex; align-items: stretch; gap: .14em; font-weight: 800; white-space: nowrap; }
+.nvp-mark i, .nvp-big i { display: inline-block; width: .07em; min-width: 3px; border-radius: 2px; background: linear-gradient(180deg, #5fa8ff, #a78bfa, #34d3c0); }
+.nvp-copy > p { font-size: 17px; line-height: 1.7; color: #d0d7e8; margin: 0 0 22px; max-width: 600px; }
+.nvp-copy > p b { color: #fff; }
+.nvp-list { list-style: none; padding: 0; margin: 0 0 30px; display: grid; gap: 14px; max-width: 600px; }
+.nvp-list li { display: flex; gap: 12px; font-size: 15.5px; line-height: 1.6; color: #d0d7e8; }
+.nvp-list li b { color: #fff; }
+.nvp-tick { flex: 0 0 24px; height: 24px; margin-top: 1px; border-radius: 50%; background: #3ddc97; color: #04140c; display: inline-flex; align-items: center; justify-content: center; }
+.nvp-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; }
+.nvp-link { color: #cfe6ff; font-weight: 600; font-size: 15px; text-decoration: underline; text-underline-offset: 4px; }
+.nvp-link:hover { color: #fff; }
+.nvp-visual { display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.nvp-seal { position: relative; width: 250px; height: 250px; display: flex; align-items: center; justify-content: center; }
+.nvp-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 210deg, #3b82f6, #8b5cf6, #14b8a6, #5fa8ff, #3b82f6); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); animation: nvp-spin 18s linear infinite; }
+@keyframes nvp-spin { to { transform: rotate(360deg); } }
+.nvp-core { width: 196px; height: 196px; border-radius: 50%; background: radial-gradient(70% 60% at 50% 22%, rgba(59,130,246,.34), transparent 72%), #0a0f1e; border: 1px dashed rgba(255,255,255,.3); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.nvp-big { display: inline-flex; align-items: stretch; gap: 7px; font-size: 46px; font-weight: 800; line-height: .92; letter-spacing: -.02em; color: #fff; }
+.nvp-v { margin-top: 12px; font-size: 13px; font-weight: 700; letter-spacing: .3em; padding-left: .3em; color: #fff; }
+.nvp-s { margin-top: 5px; font-size: 9.5px; font-weight: 600; letter-spacing: .26em; padding-left: .26em; color: #34d3c0; }
+.nvp-card { width: 100%; max-width: 380px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.16); border-radius: 18px; padding: 20px 22px; display: flex; flex-direction: column; gap: 4px; }
+.nvp-card-label { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #aab4cb; }
+.nvp-card strong { font-size: 22px; font-weight: 700; color: #fff; }
+.nvp-card > span:not(.nvp-card-label) { font-size: 14px; color: #d0d7e8; }
+.nvp-stages { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.nvp-stages em { font-style: normal; font-size: 12.5px; font-weight: 700; color: #04140c; background: #3ddc97; border-radius: 999px; padding: 4px 11px; }
+@media (max-width: 900px) { .nvp { padding: 72px 20px; } .nvp-inner { grid-template-columns: 1fr; gap: 44px; } }
+@media (prefers-reduced-motion: reduce) { .nvp-ring { animation: none; } }

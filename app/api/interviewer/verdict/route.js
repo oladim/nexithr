@@ -3,6 +3,7 @@ import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { synthesizeNotes } from "@/lib/stageResult";
 import { notifyUser } from "@/lib/notify";
+import { getOrIssueCertificate } from "@/lib/certificate";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,9 @@ export async function POST(request) {
     const { data: iv } = await admin.from("interviewers").select("kind").eq("id", me.id).maybeSingle();
     if (!iv) return NextResponse.json({ error: "Your interviewer profile isn't set up." }, { status: 403 });
     if (iv.kind !== stage) return NextResponse.json({ error: `This is an HR/Professional mismatch — you can only grade ${iv.kind} interviews.` }, { status: 403 });
+    // Must be the interviewer an admin assigned to this candidate's booking.
+    const { data: mine } = await admin.from("interviews").select("id").eq("candidate_id", candidateId).eq("type", stage).eq("interviewer_id", me.id).limit(1);
+    if (!(mine || []).length) return NextResponse.json({ error: "You haven't been assigned to this candidate's interview." }, { status: 403 });
   }
 
   // Prerequisites.
@@ -85,16 +89,23 @@ export async function POST(request) {
   await admin.from("interviews").update({ status: "Completed" }).eq("candidate_id", candidateId).eq("type", stage).eq("status", "Confirmed");
 
   // 5) Passing HR puts them on the board.
-  if (passed && stage === "HR") await admin.from("candidates").update({ on_board: true }).eq("id", candidateId);
+  if (passed && stage === "HR") {
+    await admin.from("candidates").update({ on_board: true }).eq("id", candidateId);
+    // All stages passed → issue their certificate (best-effort; it is also
+    // issued on first view if this fails).
+    try { await getOrIssueCertificate(admin, candidateId); } catch { /* ignore */ }
+  }
 
   // 6) Notify the candidate.
   await notifyUser(admin, {
     userId: candidateId,
     title: passed ? `${stage} interview passed` : `${stage} interview — not passed`,
     body: passed
-      ? (stage === "HR" ? "Congratulations — you've passed all stages and you're now on the candidate board." : "You've passed the Professional interview. You can now book your HR interview.")
+      ? (stage === "HR" ? "Congratulations — you've passed all stages and you're now on the candidate board. Your NexIT Verified Professional (N|VP) certificate is ready to print from your dashboard." : "You've passed the Professional interview. You can now book your HR interview.")
       : `Your ${stage} interview wasn't passed this time. You can review the feedback and retry with an assessment token.`,
-    cta: { label: "View your result", path: `/dashboard/interview/${stage.toLowerCase()}` },
+    cta: passed && stage === "HR"
+      ? { label: "Print my certificate", path: "/dashboard/certificate" }
+      : { label: "View your result", path: `/dashboard/interview/${stage.toLowerCase()}` },
   });
 
   return NextResponse.json({ ok: true, passed, attemptNo, result: { verdict, avg: synth.avg, strengths: synth.strengths, improvements: synth.improvements, summary: synth.summary, passed } });
