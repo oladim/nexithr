@@ -48,7 +48,7 @@ export default function RecruiterDashboard() {
         <span className="date-pill">Recruiter</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 24 }}>
+      <div className="iv-stats cols-3">
         {loading && !stats
           ? [0, 1, 2].map((i) => <div className="iv-stat" key={i}><p className="v">—</p><p className="l">Loading…</p></div>)
           : statCards.map((s) => (

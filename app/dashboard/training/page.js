@@ -89,7 +89,7 @@ export default function TrainingOverview() {
       ) : (
         <>
           <h1 className="train-hero">Welcome back, {firstName}! Ready for the next step?</h1>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 18, marginTop: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 18, marginTop: 16 }}>
             <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <span className="pi"><IconCap /></span>
               <h3 className="card-title" style={{ margin: 0 }}>Suggested training</h3>

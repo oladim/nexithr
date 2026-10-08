@@ -29,21 +29,21 @@ export default function VerifyClient({ id }) {
   };
 
   const card = { background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 18, padding: 28 };
-  const row = { display: "flex", justifyContent: "space-between", gap: 16, padding: "12px 0", borderTop: "1px solid rgba(255,255,255,.1)", fontSize: 15 };
+  const row = { display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "4px 16px", padding: "12px 0", borderTop: "1px solid rgba(255,255,255,.1)", fontSize: 15 };
 
   return (
     <main style={{ minHeight: "100vh", background: BG, color: "#f4f7ff", padding: "48px 20px", fontFamily: "Inter, system-ui, sans-serif" }}>
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <Link href="/" style={{ color: "#fff", fontWeight: 700, fontSize: 20, textDecoration: "none" }}>NexIT-Africa</Link>
-        <h1 style={{ fontSize: 30, fontWeight: 800, margin: "28px 0 8px", letterSpacing: "-.02em" }}>Verify a certificate</h1>
+        <h1 style={{ fontSize: "clamp(24px, 7vw, 30px)", fontWeight: 800, margin: "28px 0 8px", letterSpacing: "-.02em" }}>Verify a certificate</h1>
         <p style={{ color: "#c5cee2", margin: "0 0 24px", lineHeight: 1.6 }}>
           Confirm that a NexIT Verified Professional (N|VP) certificate is genuine. Enter the certificate number printed at the top right of the certificate.
         </p>
 
-        <form onSubmit={submit} style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+        <form onSubmit={submit} style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
           <input
             value={value} onChange={(e) => setValue(e.target.value)} placeholder="NXA-2026-XXXXXXXX" aria-label="Certificate number"
-            style={{ flex: 1, padding: "13px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,.25)", background: "rgba(10,14,26,.7)", color: "#fff", fontSize: 15, letterSpacing: ".04em" }}
+            style={{ flex: "1 1 200px", minWidth: 0, padding: "13px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,.25)", background: "rgba(10,14,26,.7)", color: "#fff", fontSize: 15, letterSpacing: ".04em" }}
           />
           <button type="submit" style={{ padding: "13px 22px", borderRadius: 12, border: 0, background: "#3b82f6", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Verify</button>
         </form>

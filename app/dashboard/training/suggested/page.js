@@ -14,7 +14,7 @@ function ResourceList({ heading, items }) {
   return (
     <div style={{ marginTop: 14 }}>
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, textTransform: "capitalize" }}>{heading}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))", gap: 12 }}>
         {items.map((r) => (
           <div key={r.id} className="card pad" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <b style={{ fontSize: 14 }}>{r.title}</b>

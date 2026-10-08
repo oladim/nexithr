@@ -252,7 +252,7 @@ function GroupsTab({ groups, superAdmin, reload, setMsg, setErr }) {
 
 function PermissionGrid({ selected, onToggle }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 100%), 1fr))", gap: 8, marginTop: 8 }}>
       {PERMISSIONS.map((p) => (
         <label key={p.key} className="check-row" style={{ fontSize: 13 }}>
           <input type="checkbox" checked={selected.includes(p.key)} onChange={() => onToggle(p.key)} />

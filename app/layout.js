@@ -1,6 +1,8 @@
 import "./globals.css";
 import Providers from "./providers";
 
+export const viewport = { width: "device-width", initialScale: 1 };
+
 export const metadata = {
   title: "NexIT — Discover, Train, and Recruit Top Talent Seamlessly",
   description:

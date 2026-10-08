@@ -51,7 +51,7 @@ export default function StaffApprovals() {
       </div>
 
       <div className="rr-top">
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {["pending", "approved", "suspended", "rejected", "all"].map((f) => (
             <button key={f} className={`mini-btn ${filter === f ? "" : ""}`} style={filter === f ? { background: "var(--navy)", color: "#fff" } : undefined} onClick={() => setFilter(f)}>{f}</button>
           ))}

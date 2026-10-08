@@ -337,7 +337,7 @@ function BookingAssignments({ supabaseEnabled, onFlash }) {
                     {options.length === 0 ? (
                       <span style={{ fontSize: 12.5, color: "var(--muted)" }}>No approved {b.type} interviewers yet</span>
                     ) : (
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                         <select
                           value={pick[b.id] || ""}
                           onChange={(e) => setPick((p) => ({ ...p, [b.id]: e.target.value }))}

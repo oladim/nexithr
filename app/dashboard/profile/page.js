@@ -150,7 +150,7 @@ export default function ProfilePage() {
       {err && <div className="auth-error" style={{ marginBottom: 12 }}>{err}</div>}
       {msg && <div className="role-note ok" style={{ marginBottom: 12 }}>{msg}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 20, alignItems: "start" }}>
         {/* LEFT — identity + personal */}
         <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

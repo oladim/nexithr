@@ -17,7 +17,7 @@ export default function Testimonials({ heading = "Graduate outcomes" }) {
   return (
     <div style={{ marginTop: 24 }}>
       <h3 className="card-title">{heading}</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(260px, 100%),1fr))", gap: 14 }}>
         {rows.map((t) => (
           <div className="card pad" key={t.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <p style={{ margin: 0, fontStyle: "italic", lineHeight: 1.5 }}>&ldquo;{t.quote}&rdquo;</p>

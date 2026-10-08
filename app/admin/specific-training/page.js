@@ -73,10 +73,10 @@ export default function AdminSpecificTraining() {
       </div>
 
       <div className="rr-top">
-        <select className="rr-exp-input" style={{ minWidth: 220 }} value={roleKey} onChange={(e) => setRoleKey(e.target.value)}>
+        <select className="rr-exp-input" style={{ minWidth: "min(220px, 100%)" }} value={roleKey} onChange={(e) => setRoleKey(e.target.value)}>
           {roles.map((r) => <option key={r.role_key} value={r.role_key}>{r.title}</option>)}
         </select>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn-outline" onClick={() => addCourse("foundational")}><IconPlus width={14} height={14} /> Foundational course</button>
           <button className="btn-solid" onClick={() => addCourse("intensive")}><IconPlus width={14} height={14} /> Intensive course</button>
         </div>
