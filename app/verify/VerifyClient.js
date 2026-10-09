@@ -45,7 +45,7 @@ export default function VerifyClient({ id }) {
             value={value} onChange={(e) => setValue(e.target.value)} placeholder="NXA-2026-XXXXXXXX" aria-label="Certificate number"
             style={{ flex: "1 1 200px", minWidth: 0, padding: "13px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,.25)", background: "rgba(10,14,26,.7)", color: "#fff", fontSize: 15, letterSpacing: ".04em" }}
           />
-          <button type="submit" style={{ padding: "13px 22px", borderRadius: 12, border: 0, background: "#3b82f6", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Verify</button>
+          <button type="submit" style={{ padding: "13px 22px", borderRadius: 12, border: 0, background: "#2563eb", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Verify</button>
         </form>
 
         {res === null && <div style={card}>Checking…</div>}

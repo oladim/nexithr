@@ -3,6 +3,7 @@ import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { paystackVerify } from "@/lib/paystack";
 import { notifyUser } from "@/lib/notify";
+import { alertAdmins } from "@/lib/adminAlert";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,15 @@ export async function POST(request) {
 
   // Mark paid, then apply the effect.
   await admin.from("candidate_payments").update({ status: "success", paid_at: new Date().toISOString() }).eq("reference", reference);
+
+  await alertAdmins(admin, {
+    key: `pay:${reference}`,
+    category: "payments",
+    subject: `Payment received — ${pay.purpose === "subscription" ? "annual subscription" : "specific training"} (${me.full_name || "candidate"})`,
+    summary: `${me.full_name || "A candidate"} completed a Paystack payment.`,
+    details: [["Candidate", `${me.full_name || "—"} (${me.email || me.authEmail || ""})`], ["For", pay.purpose === "subscription" ? "Annual subscription" : `Specific training — ${pay.role_key || ""}${pay.tier ? ` (${pay.tier})` : ""}`], ["Amount", pay.amount != null ? `${pay.currency || "NGN"} ${Number(pay.amount).toLocaleString()}` : null], ["Reference", reference]],
+    cta: { label: "Open admin", path: "/admin" },
+  });
 
   if (pay.purpose === "subscription") {
     // Extend from the later of now or the current expiry, by one year.

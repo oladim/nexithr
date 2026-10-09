@@ -17,6 +17,8 @@ import {
   IconFileText,
   IconChevronRight,
 } from "@/components/Icons";
+import PrivacyPolicy from "@/components/PrivacyPolicy";
+import PrivacyConsent from "@/components/PrivacyConsent";
 
 const TABS = ["Settings", "Notification", "Privacy"];
 
@@ -52,6 +54,9 @@ const NOTIF_GROUPS = [
 export default function SettingsPage() {
   const { user, signup } = useAuth();
   const [tab, setTab] = useState("Settings");
+  useEffect(() => {
+    try { const t = new URLSearchParams(window.location.search).get("tab"); if (t && TABS.includes(t)) setTab(t); } catch { /* ignore */ }
+  }, []);
 
   const name = user?.name || [signup.firstName, signup.lastName].filter(Boolean).join(" ") || "Your name";
   const email = user?.email || signup.email || "—";
@@ -80,8 +85,8 @@ export default function SettingsPage() {
     },
     {
       rows: [
-        { icon: <IconChat width={17} height={17} />, label: "Help & support", href: "mailto:support@nexit.africa" },
-        { icon: <IconChat width={17} height={17} />, label: "Contact us", href: "mailto:hello@nexit.africa" },
+        { icon: <IconChat width={17} height={17} />, label: "Help & support", href: "mailto:support@nexitafrica.com" },
+        { icon: <IconChat width={17} height={17} />, label: "Contact us", href: "mailto:support@nexitafrica.com" },
       ],
     },
   ];
@@ -151,26 +156,9 @@ export default function SettingsPage() {
         {tab === "Notification" && <NotificationPrefs />}
 
         {tab === "Privacy" && (
-          <div className="privacy-body">
-            <h4>1. Types of data we collect</h4>
-            <p>
-              We collect information you provide when you create an account, upload your CV, and
-              complete assessments — including your name, contact details, professional background,
-              and interview recordings. This data powers your candidate profile and matching.
-            </p>
-            <h4>2. Use of your personal data</h4>
-            <p>
-              Your data is used to run your assessments, generate feedback, match you with partner
-              companies on the candidate board, and improve the accuracy of our AI evaluations. We do
-              not sell your personal data to third parties.
-            </p>
-            <h4>3. Disclosure of your personal data</h4>
-            <p>
-              Once you pass all interview stages and join the candidate board, verified recruiters
-              from partner companies can view your profile and reach you directly. You control what
-              appears on your public profile from the Profile page.
-            </p>
-            <button className="privacy-accept">Accept</button>
+          <div>
+            <PrivacyPolicy />
+            <PrivacyConsent />
           </div>
         )}
       </div>

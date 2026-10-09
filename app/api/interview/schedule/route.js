@@ -5,6 +5,7 @@ import { getServiceSupabase } from "@/lib/supabase/admin";
 import { createMeetEvent } from "@/lib/google";
 import { ROLE_LABELS } from "@/lib/db";
 import { notifyUser } from "@/lib/notify";
+import { alertAdmins } from "@/lib/adminAlert";
 
 export const runtime = "nodejs";
 
@@ -120,6 +121,15 @@ export async function POST(request) {
       });
     }
   } catch { /* best-effort */ }
+
+  await alertAdmins(admin, {
+    key: `booking:${bookingGroup}`,
+    category: "interviews",
+    subject: `${label} booked — ${me.full_name || "a candidate"} (assign an interviewer)`,
+    summary: `${me.full_name || "A candidate"} booked a ${label}. It has no interviewer yet — please assign one.`,
+    details: [["Candidate", `${me.full_name || "—"} (${me.email || me.authEmail || ""})`], ["Role", roleLabel], ["When", whenText], ["Mode", mode], ["Meet link", meet.meetLink]],
+    cta: { label: "Assign interviewer", path: "/admin/interviews" },
+  });
 
   return NextResponse.json({
     ok: true,

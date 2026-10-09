@@ -11,6 +11,7 @@ import {
   END_SIGNAL,
   FINAL_MARKER,
 } from "@/lib/interviewPrompt";
+import { alertAdmins } from "@/lib/adminAlert";
 
 // Strip anything that shouldn't be read aloud (fenced code / JSON blocks) from
 // a spoken interviewer turn, as a guard against the report leaking to TTS.
@@ -151,6 +152,17 @@ async function persistAiResult(me, assessment) {
       band, suggested_training: assessment.suggestedTraining || null, status, updated_at: now,
     }, { onConflict: "candidate_id" });
     await admin.from("candidates").update({ last_ai_attempt_at: now }).eq("id", me.id);
+    const bandLabel = { ready: "Ready", close: "Almost there", foundational: "Foundational" }[band] || band;
+    await alertAdmins(admin, {
+      key: `ai:${me.id}:${attempts}`,
+      category: "results",
+      subject: `AI interview ${status === "pending_review" ? "awaiting your approval" : "completed"} — ${me.full_name || "candidate"} (${overall}%)`,
+      summary: status === "pending_review"
+        ? `${me.full_name || "A candidate"} finished the AI interview. The result is held until an admin releases it.`
+        : `${me.full_name || "A candidate"} finished the AI interview and ${passed ? "passed — they can now book the Professional interview" : "did not reach the pass mark"}.`,
+      details: [["Candidate", `${me.full_name || "—"} (${me.email || me.authEmail || ""})`], ["Score", `${overall}%`], ["Band", bandLabel], ["Attempt", String(attempts)]],
+      cta: { label: status === "pending_review" ? "Review AI results" : "Open interview manager", path: status === "pending_review" ? "/admin/ai-results" : "/admin/interviews" },
+    });
     return { attempts, score: overall, passed, band, status };
   } catch { return null; }
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
-import { loadJobs } from "@/lib/db";
+import { loadApprovedJobs } from "@/lib/db";
 import {
   IconSearch,
   IconCalendar,
@@ -20,6 +20,17 @@ const JOBS = [
   { title: "UX Designer", meta: "Full-time · Remote · 1 week ago", Icon: IconChart },
   { title: "Frontend Developer", meta: "Full-time · Hybrid · 3 days ago", Icon: IconCode },
 ];
+
+// "3 days ago" style label for a posting date.
+function timeAgo(iso) {
+  if (!iso) return "";
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (d <= 0) return "today";
+  if (d === 1) return "1 day ago";
+  if (d < 7) return `${d} days ago`;
+  const w = Math.floor(d / 7);
+  return w === 1 ? "1 week ago" : w < 5 ? `${w} weeks ago` : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
 
 // Palette used to colour the competency ring/legend.
 const SKILL_COLORS = ["#007bff", "#2ecc71", "#1c1f2a", "#ffab00", "#8b5cf6", "#ef4444"];
@@ -38,7 +49,7 @@ export default function DashboardHome() {
   const { user, app, supabaseEnabled } = useAuth();
   const firstName = (user?.name || "there").split(" ")[0];
   const hasCv = !!app.cv;
-  const [jobs, setJobs] = useState(JOBS);
+  const [jobs, setJobs] = useState(supabaseEnabled ? null : JOBS); // null = loading (real mode)
 
   // Real mode: live token balance + open jobs from the database.
   const tokenValue = app.tokens ?? 0;
@@ -81,17 +92,19 @@ export default function DashboardHome() {
     if (!supabaseEnabled) return;
     (async () => {
       const sb = getBrowserSupabase();
-      if (!sb) return;
-      const rows = await loadJobs(sb);
-      if (rows.length) {
+      if (!sb) { setJobs([]); return; }
+      try {
+        // Only jobs an admin has approved are shown to candidates.
+        const rows = await loadApprovedJobs(sb);
         setJobs(
           rows.slice(0, 4).map((j) => ({
+            id: j.id,
             title: j.title,
-            meta: [j.type, j.location].filter(Boolean).join(" · "),
-            Icon: IconChart,
+            meta: [j.company, j.type, j.location, timeAgo(j.posted_at)].filter(Boolean).join(" · "),
+            Icon: /design|ux|ui/i.test(j.title) ? IconChart : IconCode,
           }))
         );
-      }
+      } catch { setJobs([]); }
     })();
   }, [supabaseEnabled]);
   const today = new Date();
@@ -107,10 +120,11 @@ export default function DashboardHome() {
       <div className="welcome-row">
         <h1>Welcome back, {firstName}! 👋</h1>
         <div className="tools">
-          <span className="search-box">
+          <button type="button" className="search-box search-trigger" onClick={() => window.dispatchEvent(new Event("nexit:open-search"))} aria-label="Search pages">
             <IconSearch width={18} height={18} />
-            <input placeholder="Search" />
-          </span>
+            <span>Search pages…</span>
+            <kbd>Ctrl K</kbd>
+          </button>
           <span className="date-pill">
             <IconCalendar width={16} height={16} /> {dateStr}
           </span>
@@ -186,22 +200,34 @@ export default function DashboardHome() {
                   </div>
                 </div>
               ) : (
-                <p style={{ fontSize: 14, color: "var(--gray-500)", margin: "8px 0 0" }}>
-                  Complete your AI interview to see your competency breakdown here.
-                </p>
+                <div className="empty-cta">
+                  <p>Your competency breakdown appears here after your AI interview.</p>
+                  <Link href={hasCv ? "/dashboard/interview/ai" : "/dashboard/cv-upload"} className="btn-outline">
+                    {hasCv ? "Take the AI interview" : "Upload your CV to begin"}
+                  </Link>
+                </div>
               )}
             </div>
 
             {/* Assessment scores (bars) */}
             <div className="card pad">
               <h3 className="card-title">Assessment Scores</h3>
-              <div className="bars-chart">
-                {assessmentBars.map((b, i) => (
-                  <div className="col" key={i}>
-                    <div className="bar" style={{ height: `${b.value || 0}%` }} title={b.value != null ? `${b.value}%` : "Not taken yet"} />
-                    <small>{b.label}</small>
-                  </div>
-                ))}
+              <div className="score-rows">
+                {assessmentBars.map((b, i) => {
+                  const full = { AI: "AI interview", Prof: "Professional interview", HR: "HR interview" }[b.label] || b.label;
+                  const has = b.value != null;
+                  return (
+                    <div className="score-row" key={i}>
+                      <div className="sr-top">
+                        <span>{full}</span>
+                        <b className={has ? "" : "muted"}>{has ? `${b.value}%` : "Not taken yet"}</b>
+                      </div>
+                      <div className="sr-track" role="progressbar" aria-label={full} aria-valuemin={0} aria-valuemax={100} aria-valuenow={has ? b.value : 0}>
+                        <i style={{ width: `${has ? Math.max(2, b.value) : 0}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               <p style={{ fontSize: 12, color: "var(--gray-500)", margin: "10px 0 0" }}>
                 AI diagnostic, Professional and HR interview scores.
@@ -217,7 +243,13 @@ export default function DashboardHome() {
               </h3>
               <Link href="/dashboard/jobs" className="link">See all</Link>
             </div>
-            {jobs.map(({ title, meta, Icon }) => (
+            {jobs === null ? (
+              <p className="tb-empty" style={{ textAlign: "left", padding: "14px 0" }}>Loading open positions…</p>
+            ) : jobs.length === 0 ? (
+              <div className="empty-cta" style={{ padding: "6px 0 4px" }}>
+                <p>No open positions right now. New roles from our hiring partners appear here as soon as they&apos;re approved.</p>
+              </div>
+            ) : jobs.map(({ title, meta, Icon }) => (
               <div className="job-row" key={title}>
                 <span className="jico">
                   <Icon width={22} height={22} />

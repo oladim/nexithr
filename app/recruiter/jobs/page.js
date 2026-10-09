@@ -7,6 +7,7 @@ import { loadMyJobs, createJob, deleteJob } from "@/lib/db";
 import JobForm from "@/components/JobForm";
 import ApplicantsPanel from "@/components/ApplicantsPanel";
 import { IconPlus, IconX, IconPeople } from "@/components/Icons";
+import { reportEvent } from "@/lib/events";
 
 export default function RecruiterJobs() {
   const { supabaseEnabled } = useAuth();
@@ -30,6 +31,7 @@ export default function RecruiterJobs() {
       if (!user) { setErr("Please sign in."); return; }
       const { data, error } = await createJob(sb(), { ...draft, status: "pending", posted_by: user.id });
       if (error) { setErr(error.message); return; }
+      reportEvent("job_posted", data?.id);
       setJobs((list) => [data, ...(list || [])]);
     } else {
       setJobs((list) => [{ ...draft, id: `tmp_${Date.now()}`, status: "pending" }, ...(list || [])]);

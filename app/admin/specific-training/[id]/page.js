@@ -7,6 +7,7 @@ import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadCourseModules, createModule, updateModule, deleteModule, uploadTrainingFile } from "@/lib/db";
 import { IconPlus, IconCheck, IconX, IconFileText } from "@/components/Icons";
+import { ApprovalBar, useCanApprove } from "@/components/admin/Approval";
 
 const TYPES = [
   { v: "text", label: "Reading (text)" },
@@ -50,6 +51,7 @@ function ContentEditor({ courseId, sb }) {
   const [mods, setMods] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const canApprove = useCanApprove();
 
   const load = async () => setMods(await loadCourseModules(sb(), courseId));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [courseId]);
@@ -88,7 +90,7 @@ function ContentEditor({ courseId, sb }) {
   return (
     <>
       <div className="rr-top">
-        <span className="cvr-count">{(mods || []).length} modules</span>
+        <span className="cvr-count">{(mods || []).length} modules · {(mods || []).filter((x) => x.approved).length} approved</span>
         <button className="btn-solid" onClick={add}><IconPlus width={14} height={14} /> Add module</button>
       </div>
       {err && <div className="auth-error" style={{ maxWidth: 640 }}>{err}</div>}
@@ -102,6 +104,7 @@ function ContentEditor({ courseId, sb }) {
                 <input className="rr-title-input" value={m.title} onChange={(e) => change(m.id, "title", e.target.value)} />
                 <button className="rr-del" onClick={() => remove(m)}><IconX width={16} height={16} /></button>
               </div>
+              <ApprovalBar kind="module" id={m.id} approved={!!m.approved} canApprove={canApprove} onChange={(v) => change(m.id, "approved", v)} />
               <div className="field-row">
                 <div className="field field-simple"><label>Type</label>
                   <select value={m.type} onChange={(e) => change(m.id, "type", e.target.value)}>

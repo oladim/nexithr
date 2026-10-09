@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { IconInstagram, IconX, IconFacebook, IconLinkedin } from "./Icons";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -9,10 +10,7 @@ export default function Footer() {
         <div className="footer-top">
           <div className="footer-brand">
             <a href="#home" className="footer-logo" aria-label="NexIT-Africa">
-              <svg className="fmark" viewBox="0 0 39 49" fill="none" aria-hidden="true">
-                <path d="M4 45V9c0-2 2.4-3 3.9-1.6L31 30V4h4v36c0 2-2.4 3-3.9 1.6L8 18v27H4z" fill="#fff" />
-              </svg>
-              <span>NexIT&#8209;Africa</span>
+              <BrandLogo tone="dark" height={38} />
             </a>
             <p className="footer-tagline">
               Skills-first tech hiring — diagnose, train, and get verified talent placed, all in one platform.
@@ -66,9 +64,9 @@ export default function Footer() {
           <div className="credit">© {year} NexIT-Africa. All rights reserved.</div>
           <div className="credit soft">Powered by NexIT</div>
           <div className="legal">
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
-            <a href="#">Cookies</a>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/verify">Verify a certificate</a>
           </div>
         </div>
       </div>

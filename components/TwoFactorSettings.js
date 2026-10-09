@@ -78,11 +78,17 @@ export default function TwoFactorSettings() {
         <p style={{ fontSize: 14, color: "var(--muted)" }}>Loading…</p>
       ) : enabled ? (
         <>
-          <p className="pill-status done" style={{ display: "inline-block", marginBottom: 12 }}><IconCheck width={13} height={13} style={{ verticalAlign: "-2px", marginRight: 4 }} /> Enabled</p>
-          <label className="cv-step-label">Enter a current code to turn 2FA off</label>
-          <input className="rr-exp-input" style={{ width: 160, letterSpacing: 4, fontSize: 18, textAlign: "center" }} inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />
-          <div style={{ marginTop: 12 }}>
-            <button className="btn-outline" disabled={busy || code.length !== 6} onClick={disable}>Turn off 2FA</button>
+          <div className="tfa-status">
+            <span className="tfa-pill"><IconCheck width={14} height={14} /> Enabled</span>
+            <span className="tfa-status-text">Your account asks for an authenticator code when you sign in.</span>
+          </div>
+          <div className="tfa-field">
+            <label className="tfa-label" htmlFor="tfa-off-code">To turn 2FA off, enter a current code from your app</label>
+            <div className="tfa-row">
+              <input id="tfa-off-code" className="rr-exp-input tfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" aria-describedby="tfa-off-hint" />
+              <button className="btn-outline" disabled={busy || code.length !== 6} onClick={disable}>{busy ? "Turning off…" : "Turn off 2FA"}</button>
+            </div>
+            <span id="tfa-off-hint" className="tfa-hint">{code.length === 6 ? "Ready." : `${6 - code.length} digit${6 - code.length === 1 ? "" : "s"} to go`}</span>
           </div>
         </>
       ) : !setup ? (
@@ -103,9 +109,11 @@ export default function TwoFactorSettings() {
           <p style={{ fontSize: 12, color: "var(--muted)", wordBreak: "break-all", marginTop: 8 }}>
             Manual key: <code>{setup.secret}</code>
           </p>
-          <label className="cv-step-label" style={{ marginTop: 10 }}>Enter the 6-digit code</label>
-          <input className="rr-exp-input" style={{ width: 160, letterSpacing: 4, fontSize: 18, textAlign: "center" }} inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />
-          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+          <div className="tfa-field">
+            <label className="tfa-label" htmlFor="tfa-on-code">Enter the 6-digit code</label>
+            <input id="tfa-on-code" className="rr-exp-input tfa-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="000000" />
+          </div>
+          <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="btn-outline" disabled={busy} onClick={() => { setSetup(null); setCode(""); }}>Cancel</button>
             <button className="btn-solid" disabled={busy || code.length !== 6} onClick={enable}>Verify &amp; enable</button>
           </div>

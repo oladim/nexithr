@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings, DEFAULT_SETTINGS } from "@/lib/db";
 import { paystackMode } from "@/lib/paystack";
+import { maintenanceFromSettings } from "@/lib/maintenance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,5 +57,6 @@ function toClient(s) {
     aiResultRequiresApproval: !!s.ai_result_requires_approval,
     oauthGoogleEnabled: !!s.oauth_google_enabled,
     oauthAppleEnabled: !!s.oauth_apple_enabled,
+    maintenance: maintenanceFromSettings(s),
   };
 }

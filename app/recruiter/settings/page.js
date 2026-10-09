@@ -6,6 +6,8 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadNotificationPrefs, saveNotificationPrefs } from "@/lib/db";
 import SettingsToggles from "@/components/SettingsToggles";
 import TwoFactorSettings from "@/components/TwoFactorSettings";
+import PrivacyPolicy from "@/components/PrivacyPolicy";
+import PrivacyConsent from "@/components/PrivacyConsent";
 
 const GROUPS = [
   {
@@ -29,7 +31,11 @@ const GROUPS = [
 const TABS = ["Notifications", "Security", "Privacy"];
 
 export default function RecruiterSettings() {
+  // open a tab from ?tab=
   const [tab, setTab] = useState("Notifications");
+  useEffect(() => {
+    try { const t = new URLSearchParams(window.location.search).get("tab"); if (t && TABS.includes(t)) setTab(t); } catch { /* ignore */ }
+  }, []);
   return (
     <>
       <div className="page-head">
@@ -52,10 +58,9 @@ export default function RecruiterSettings() {
         )}
 
         {tab === "Privacy" && (
-          <div style={{ fontSize: 14, color: "var(--gray-500)", lineHeight: 1.7 }}>
-            <h4 style={{ color: "var(--navy)", margin: "0 0 8px" }}>Your privacy</h4>
-            <p style={{ margin: "0 0 12px" }}>We only use your data to connect you with vetted candidates and to operate the NexIT platform. You control what candidates can see about your company.</p>
-            <p style={{ margin: 0 }}>You can request deletion of your recruiter account at any time from your profile.</p>
+          <div>
+            <PrivacyPolicy />
+            <PrivacyConsent />
           </div>
         )}
       </div>

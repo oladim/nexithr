@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
+import { alertAdmins } from "@/lib/adminAlert";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,13 @@ export async function POST(request) {
   );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Notify any poster + admins could be added here; keep it simple for now.
+  await alertAdmins(admin, {
+    key: `apply:${me.id}:${jobId}`,
+    category: "jobs",
+    subject: `Job application — ${me.full_name || "a candidate"} → ${job.title}`,
+    summary: `${me.full_name || "A board-ready candidate"} applied for “${job.title}”.`,
+    details: [["Candidate", `${me.full_name || "—"} (${me.email || me.authEmail || ""})`], ["Job", job.title]],
+    cta: { label: "Open job board", path: "/admin/jobs" },
+  });
   return NextResponse.json({ ok: true });
 }

@@ -7,6 +7,7 @@ import { IconFilter, IconChevronDown, IconBriefcase } from "@/components/Icons";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadBoardCandidates, mapBoardCandidate, createHireRequest } from "@/lib/db";
+import { reportEvent } from "@/lib/events";
 
 export default function CandidateList() {
   const { supabaseEnabled } = useAuth();
@@ -86,8 +87,9 @@ function RequestHire({ candidate, supabaseEnabled }) {
         const sb = getBrowserSupabase();
         const { data: { user } } = await sb.auth.getUser();
         if (!user) { alert("Please sign in as an employer/recruiter."); setState("idle"); return; }
-        const { error } = await createHireRequest(sb, user.id, candidate.id, { position, message: "" });
+        const { data: hr, error } = await createHireRequest(sb, user.id, candidate.id, { position, message: "" });
         if (error) { alert(error.message); setState("idle"); return; }
+        reportEvent("hire_request", hr?.id);
       } catch (e) { alert(e.message); setState("idle"); return; }
     }
     setState("done");

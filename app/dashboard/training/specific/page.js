@@ -9,6 +9,7 @@ import Testimonials from "@/components/Testimonials";
 import { ROLE_LABELS, loadSpecificCourses } from "@/lib/db";
 import { startPayment, formatMoney } from "@/lib/billing";
 import { IconLock, IconCheck } from "@/components/Icons";
+import CourseRequest from "@/components/dashboard/CourseRequest";
 
 // NexIT-curated, role-specific programme with live practical sessions.
 export default function SpecificTrainingPage() {
@@ -83,6 +84,7 @@ export default function SpecificTrainingPage() {
             )
           )
         )}
+        <CourseRequest />
         <Testimonials />
       </>
     );
@@ -123,6 +125,8 @@ export default function SpecificTrainingPage() {
           aren&apos;t placed within the stated window, talk to us about our placement guarantee — we only win when you do.
         </p>
       </div>
+
+      <CourseRequest />
 
       <Testimonials />
 

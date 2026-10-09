@@ -70,7 +70,6 @@ export const SETTINGS_GROUPS = [
   {
     group: "General settings",
     items: [
-      { label: "Maintenance mode", on: false },
       { label: "Allow new sign-ups", on: true },
       { label: "Require email verification", on: true },
     ],

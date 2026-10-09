@@ -16,6 +16,10 @@ import {
 } from "@/components/Icons";
 import StaffGate from "@/components/StaffGate";
 import TwoFactorGate from "@/components/TwoFactorGate";
+import BrandLogo from "@/components/BrandLogo";
+import TopbarActions from "@/components/TopbarActions";
+import ConsentBanner from "@/components/ConsentBanner";
+import MaintenanceGate from "@/components/MaintenanceGate";
 
 const NAV = [
   { href: "/interviewer", label: "Dashboard", Icon: IconGrid },
@@ -44,10 +48,7 @@ export default function InterviewerLayout({ children }) {
     <div className="shell">
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <svg className="mk" viewBox="0 0 39 49" fill="none" aria-hidden="true">
-            <path d="M4 45V9c0-2 2.4-3 3.9-1.6L31 30V4h4v36c0 2-2.4 3-3.9 1.6L8 18v27H4z" fill="#007bff" />
-          </svg>
-          <span className="nm">NexIT-Africa</span>
+          <Link href="/" aria-label="NexIT-Africa home" className="brand-link"><BrandLogo height={32} /></Link>
         </div>
         <div style={{ padding: "0 8px 12px" }}>
           <span className={`role-badge ${isHR ? "hr" : ""}`}>{interviewerKind} Interviewer</span>
@@ -84,17 +85,9 @@ export default function InterviewerLayout({ children }) {
               <span>{interviewerKind} Interviewer</span>
             </div>
           </div>
-          <div className="acts">
-            <span className="icon-btn"><IconSearch /></span>
-            <Link href="/interviewer/notifications" className="icon-btn"><IconBell /></Link>
-            <span className="avatar">
-              <span className="pic">{initials}</span>
-              <span className="nm2">{user.name}</span>
-              <IconChevronRight width={16} height={16} style={{ color: "#9aa2ae" }} />
-            </span>
-          </div>
+          <TopbarActions nav={NAV} notificationsHref="/interviewer/notifications" />
         </header>
-        <div className="content"><TwoFactorGate><StaffGate>{children}</StaffGate></TwoFactorGate></div>
+        <div className="content"><ConsentBanner /><MaintenanceGate><TwoFactorGate><StaffGate>{children}</StaffGate></TwoFactorGate></MaintenanceGate></div>
       </div>
     </div>
   );

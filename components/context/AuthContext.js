@@ -5,6 +5,8 @@ import { SUPABASE_ENABLED } from "@/lib/supabase/config";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import * as db from "@/lib/db";
 import { computeStageResult } from "@/components/interview/stage";
+import { reportEvent } from "@/lib/events";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/policy";
 
 /**
  * Auth/session store for the candidate flow.
@@ -85,6 +87,14 @@ export function AuthProvider({ children }) {
     setRole(r);
     setViewAs(r);
     setApprovalStatus(profile?.approval_status || "approved");
+    // First sign-in on this browser → tell the team about the new account
+    // (the server emails once per user, so repeats are harmless).
+    if (r !== "admin") {
+      try {
+        const k = `nexit.reg.${authUser.id}`;
+        if (!localStorage.getItem(k)) { reportEvent("registered"); localStorage.setItem(k, "1"); }
+      } catch { /* storage unavailable */ }
+    }
     if (r === "interviewer") {
       const { data: iv } = await supabase.from("interviewers").select("kind").eq("id", authUser.id).maybeSingle();
       if (iv?.kind) setInterviewerKind(iv.kind);
@@ -204,6 +214,8 @@ export function AuthProvider({ children }) {
             experience: signup.experience,
             skills: signup.skills,
             job_type: signup.jobType,
+            privacy_accepted_version: signup.agreeTerms ? PRIVACY_VERSION : null,
+            terms_accepted_version: signup.agreeTerms ? TERMS_VERSION : null,
           },
         },
       });
@@ -304,6 +316,7 @@ export function AuthProvider({ children }) {
         fileName: cv.name || "cv.pdf", filePath: path, industry: cv.industry, jobType: cv.jobType,
       });
       if (error) return { error: error.message };
+      reportEvent("cv_uploaded"); // emails the team inbox: CV awaiting review
     }
     setApp((prev) => ({
       ...prev,
@@ -440,6 +453,7 @@ export function AuthProvider({ children }) {
     try {
       const path = await db.uploadStaffDocFile(supabase, id, file);
       await db.attachStaffDoc(supabase, id, { docPath: path, docName: file.name });
+      reportEvent("staff_docs");
       return {};
     } catch (e) {
       return { error: e.message || String(e) };

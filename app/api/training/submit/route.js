@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
+import { alertAdmins } from "@/lib/adminAlert";
 
 export const runtime = "nodejs";
 
@@ -20,11 +21,12 @@ export async function POST(request) {
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
   // Validate: module belongs to course, is gradable, and candidate has access.
-  const { data: mod } = await admin.from("course_modules").select("id, course_id, type, max_score, questions").eq("id", moduleId).maybeSingle();
-  if (!mod || mod.course_id !== courseId) return NextResponse.json({ error: "Unknown module" }, { status: 404 });
+  const { data: mod } = await admin.from("course_modules").select("id, course_id, type, max_score, questions, approved").eq("id", moduleId).maybeSingle();
+  if (!mod || mod.course_id !== courseId || !mod.approved) return NextResponse.json({ error: "Unknown module" }, { status: 404 });
   if (!["assignment", "test", "quiz"].includes(mod.type)) return NextResponse.json({ error: "This module isn't submittable." }, { status: 400 });
 
-  const { data: course } = await admin.from("specific_courses").select("role_key").eq("id", courseId).maybeSingle();
+  const { data: course } = await admin.from("specific_courses").select("role_key, approved").eq("id", courseId).maybeSingle();
+  if (!course?.approved) return NextResponse.json({ error: "This course isn't available yet." }, { status: 404 });
   const { data: access } = await admin.from("training_access").select("role_key").eq("candidate_id", me.id).eq("role_key", course?.role_key).maybeSingle();
   if (!access) return NextResponse.json({ error: "No access to this course." }, { status: 403 });
 
@@ -65,5 +67,14 @@ export async function POST(request) {
   };
   const { error } = await admin.from("submissions").upsert(row, { onConflict: "candidate_id,module_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: courseRow } = await admin.from("specific_courses").select("title").eq("id", courseId).maybeSingle();
+  await alertAdmins(admin, {
+    key: `submit:${me.id}:${moduleId}:${row.submitted_at}`,
+    category: "training",
+    subject: `${mod.type === "test" ? "Test" : "Assignment"} submitted for grading — ${me.full_name || "candidate"}`,
+    summary: `${me.full_name || "A candidate"} submitted work that needs grading.`,
+    details: [["Candidate", `${me.full_name || "—"} (${me.email || me.authEmail || ""})`], ["Course", courseRow?.title], ["Max score", mod.max_score ? String(mod.max_score) : null]],
+    cta: { label: "Grade submissions", path: `/admin/specific-training/${courseId}` },
+  });
   return NextResponse.json({ ok: true });
 }

@@ -19,7 +19,7 @@ export async function GET(request) {
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
   const { data: course } = await admin.from("specific_courses").select("*").eq("id", courseId).maybeSingle();
-  if (!course) return NextResponse.json({ error: "Unknown course" }, { status: 404 });
+  if (!course || !course.approved) return NextResponse.json({ error: "This course isn't available yet." }, { status: 404 });
 
   // Access: candidate must have purchased specific training for this role.
   const { data: access } = await admin.from("training_access").select("role_key").eq("candidate_id", me.id).eq("role_key", course.role_key).maybeSingle();
@@ -30,7 +30,7 @@ export async function GET(request) {
   const { data: enr } = await admin.from("enrollments").select("overall_score, result_released, released_at").eq("candidate_id", me.id).eq("course_id", courseId).maybeSingle();
   const released = !!enr?.result_released;
 
-  const { data: mods } = await admin.from("course_modules").select("*").eq("course_id", courseId).order("sort", { ascending: true });
+  const { data: mods } = await admin.from("course_modules").select("*").eq("course_id", courseId).eq("approved", true).order("sort", { ascending: true });
   const { data: subs } = await admin.from("submissions").select("*").eq("candidate_id", me.id).eq("course_id", courseId);
   const subByMod = {};
   (subs || []).forEach((s) => (subByMod[s.module_id] = s));

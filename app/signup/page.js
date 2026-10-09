@@ -203,8 +203,10 @@ function StepPersonal({ data, update, onNext, onBack }) {
             required
           />
           <span>
-            I agree to NexIT-Africa <a href="#">Terms of service</a> and{" "}
-            <a href="#">Privacy policy</a>
+            I agree to NexIT-Africa&apos;s{" "}
+            <a href="/terms" target="_blank" rel="noreferrer" className="link">Terms of Service</a> and{" "}
+            <a href="/privacy" target="_blank" rel="noreferrer" className="link">Privacy Policy</a>, including how my
+            CV and interview recordings are used
           </span>
         </label>
 

@@ -4,6 +4,7 @@ import { getServiceSupabase } from "@/lib/supabase/admin";
 import { synthesizeNotes } from "@/lib/stageResult";
 import { notifyUser } from "@/lib/notify";
 import { getOrIssueCertificate } from "@/lib/certificate";
+import { alertAdmins } from "@/lib/adminAlert";
 
 export const runtime = "nodejs";
 
@@ -96,7 +97,23 @@ export async function POST(request) {
     try { await getOrIssueCertificate(admin, candidateId); } catch { /* ignore */ }
   }
 
-  // 6) Notify the candidate.
+  // 6) Email the team inbox.
+  {
+    const { data: cp } = await admin.from("profiles").select("full_name, email").eq("id", candidateId).maybeSingle();
+    const boarded = passed && stage === "HR";
+    await alertAdmins(admin, {
+      key: `verdict:${candidateId}:${stage}:${attemptNo}`,
+      category: "results",
+      subject: boarded
+        ? `Candidate on the board — ${cp?.full_name || "candidate"} passed all stages`
+        : `${stage} interview ${passed ? "passed" : "not passed"} — ${cp?.full_name || "candidate"}`,
+      summary: `${me.full_name || "An interviewer"} (${isAdmin ? "admin" : `${stage} interviewer`}) submitted the ${stage} verdict: ${verdict}.${boarded ? " The candidate is now on the board and their N|VP certificate has been issued." : ""}`,
+      details: [["Candidate", `${cp?.full_name || "—"} (${cp?.email || ""})`], ["Stage", stage], ["Decision", passed ? "Advance" : "Reject"], ["Rating", `${rating}/5`], ["Attempt", String(attemptNo)]],
+      cta: { label: "Open interview manager", path: "/admin/interviews" },
+    });
+  }
+
+  // 7) Notify the candidate.
   await notifyUser(admin, {
     userId: candidateId,
     title: passed ? `${stage} interview passed` : `${stage} interview — not passed`,

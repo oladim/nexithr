@@ -6,10 +6,11 @@ import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadRoleRequirements, loadSpecificCourses, createSpecificCourse, updateSpecificCourse, deleteSpecificCourse, ROLE_LABELS } from "@/lib/db";
 import { IconPlus, IconX, IconCheck } from "@/components/Icons";
+import { ApprovalBar, useCanApprove } from "@/components/admin/Approval";
 
 const DEMO = [
-  { id: "d1", role_key: "software", title: "Backend Foundations", summary: "APIs, databases, testing", level: "foundational", duration: "4 weeks", sort: 0 },
-  { id: "d2", role_key: "software", title: "Production Engineering Intensive", summary: "System design, CI/CD, live build + practicals", level: "intensive", duration: "8 weeks", sort: 1 },
+  { id: "d1", role_key: "software", title: "Backend Foundations", summary: "APIs, databases, testing", level: "foundational", duration: "4 weeks", sort: 0, approved: true },
+  { id: "d2", role_key: "software", title: "Production Engineering Intensive", summary: "System design, CI/CD, live build + practicals", level: "intensive", duration: "8 weeks", sort: 1, approved: false },
 ];
 
 export default function AdminSpecificTraining() {
@@ -20,6 +21,7 @@ export default function AdminSpecificTraining() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const sb = () => getBrowserSupabase();
+  const canApprove = useCanApprove();
 
   useEffect(() => {
     if (!supabaseEnabled) { setRoles(Object.entries(ROLE_LABELS).map(([k, v]) => ({ role_key: k, title: v }))); setRoleKey("software"); return; }
@@ -69,7 +71,7 @@ export default function AdminSpecificTraining() {
     <>
       <div className="page-head">
         <h1>Specific Training — curriculum</h1>
-        <p>The NexIT-curated, role-specific programme candidates pay for. Organise courses by role and tier (Foundational vs Intensive).</p>
+        <p>The NexIT-curated, role-specific programme candidates pay for. Organise courses by role and tier (Foundational vs Intensive). New courses and modules stay hidden from candidates until an approver publishes them.</p>
       </div>
 
       <div className="rr-top">
@@ -96,6 +98,7 @@ export default function AdminSpecificTraining() {
                 <input className="rr-title-input" value={c.title} onChange={(e) => change(c.id, "title", e.target.value)} />
                 <button className="rr-del" onClick={() => remove(c)}><IconX width={16} height={16} /></button>
               </div>
+              <ApprovalBar kind="course" id={c.id} approved={!!c.approved} canApprove={canApprove} withModules disabled={String(c.id).startsWith("tmp_")} onChange={(v) => change(c.id, "approved", v)} />
               <label className="cv-step-label">Summary</label>
               <textarea className="cvr-textarea" rows={2} value={c.summary || ""} onChange={(e) => change(c.id, "summary", e.target.value)} />
               <div className="field-row" style={{ marginTop: 10 }}>

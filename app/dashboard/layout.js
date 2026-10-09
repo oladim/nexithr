@@ -20,6 +20,10 @@ import {
   IconBriefcase,
   IconStar,
 } from "@/components/Icons";
+import BrandLogo from "@/components/BrandLogo";
+import TopbarActions from "@/components/TopbarActions";
+import ConsentBanner from "@/components/ConsentBanner";
+import MaintenanceGate from "@/components/MaintenanceGate";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
@@ -59,10 +63,7 @@ export default function DashboardLayout({ children }) {
     <div className="shell">
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-brand">
-          <svg className="mk" viewBox="0 0 39 49" fill="none" aria-hidden="true">
-            <path d="M4 45V9c0-2 2.4-3 3.9-1.6L31 30V4h4v36c0 2-2.4 3-3.9 1.6L8 18v27H4z" fill="#007bff" />
-          </svg>
-          <span className="nm">NexIT-Africa</span>
+          <Link href="/" aria-label="NexIT-Africa home" className="brand-link"><BrandLogo height={32} /></Link>
         </div>
         <nav className="sidebar-nav">
           {NAV.map(({ href, label, Icon }) => {
@@ -105,18 +106,10 @@ export default function DashboardLayout({ children }) {
               <span>Candidate</span>
             </div>
           </div>
-          <div className="acts">
-            <span className="icon-btn"><IconSearch /></span>
-            <span className="icon-btn"><IconBell /></span>
-            <span className="avatar">
-              <span className="pic">{initials}</span>
-              <span className="nm2">{user.name}</span>
-              <IconChevronRight width={16} height={16} style={{ color: "#9aa2ae" }} />
-            </span>
-          </div>
+          <TopbarActions nav={NAV} profileHref="/dashboard/profile" settingsHref="/dashboard/settings" />
         </header>
 
-        <div className="content"><TwoFactorGate>{children}</TwoFactorGate></div>
+        <div className="content"><ConsentBanner href="/dashboard/settings?tab=Privacy" /><MaintenanceGate><TwoFactorGate>{children}</TwoFactorGate></MaintenanceGate></div>
       </div>
     </div>
   );

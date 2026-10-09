@@ -15,7 +15,7 @@ const NAV = [
 
 export default function RecruiterLayout({ children }) {
   return (
-    <PortalShell nav={NAV} badge="Recruiter" roleLabel="Recruiter">
+    <PortalShell nav={NAV} badge="Recruiter" roleLabel="Recruiter" profileHref="/recruiter/profile" settingsHref="/recruiter/settings">
       <TwoFactorGate>
         <StaffGate>{children}</StaffGate>
       </TwoFactorGate>

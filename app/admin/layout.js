@@ -16,6 +16,7 @@ const NAV = [
   { href: "/admin/ai-results", label: "AI Results", Icon: IconChart, perm: "ai_results" },
   { href: "/admin/role-requirements", label: "Role Requirements", Icon: IconCap, perm: "role_requirements" },
   { href: "/admin/specific-training", label: "Specific Training", Icon: IconCap, perm: "specific_training" },
+  { href: "/admin/course-requests", label: "Course Requests", Icon: IconFileText, perm: "course_requests" },
   { href: "/admin/suggested-resources", label: "Suggested Resources", Icon: IconCap, perm: "suggested_resources" },
   { href: "/admin/jobs", label: "Job Board", Icon: IconBriefcase, perm: "jobs" },
   { href: "/admin/hire-requests", label: "Hire Requests", Icon: IconBriefcase, perm: "hire_requests" },
@@ -54,7 +55,7 @@ export default function AdminLayout({ children }) {
   const blocked = supabaseEnabled && loaded && access && !canOpenPath(access, pathname);
 
   return (
-    <PortalShell nav={nav} badge="NexIT Admin" badgeClass="hr" roleLabel={access?.superAdmin === false ? "Admin (group)" : "Administrator"}>
+    <PortalShell maintenanceAdmin nav={nav} badge="NexIT Admin" badgeClass="hr" roleLabel={access?.superAdmin === false ? "Admin (group)" : "Administrator"} settingsHref={nav.some((n) => n.href === "/admin/settings") ? "/admin/settings" : undefined}>
       <TwoFactorGate>
         {blocked ? <AccessDenied permKey={permForPath(pathname)} /> : children}
       </TwoFactorGate>
