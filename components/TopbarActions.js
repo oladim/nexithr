@@ -34,7 +34,7 @@ function ago(iso) {
  *   settingsHref      — account "Settings" link (optional)
  *   notificationsHref — "View all" link in the notifications panel (optional)
  */
-export default function TopbarActions({ nav = [], profileHref, settingsHref, notificationsHref }) {
+export default function TopbarActions({ nav = [], profileHref, settingsHref, notificationsHref, securityHref = "/account/security" }) {
   const router = useRouter();
   const { user, logout, supabaseEnabled } = useAuth();
   const [open, setOpen] = useState(null); // "notes" | "account" | null
@@ -170,19 +170,19 @@ export default function TopbarActions({ nav = [], profileHref, settingsHref, not
             </div>
             {profileHref && <Link role="menuitem" href={profileHref} onClick={() => setOpen(null)}><IconUser width={16} height={16} /> My profile</Link>}
             {settingsHref && <Link role="menuitem" href={settingsHref} onClick={() => setOpen(null)}><IconGear width={16} height={16} /> Settings</Link>}
-            <Link role="menuitem" href="/account/security" onClick={() => setOpen(null)}><IconLock width={16} height={16} /> Security &amp; 2FA</Link>
+            <Link role="menuitem" href={securityHref} onClick={() => setOpen(null)}><IconLock width={16} height={16} /> Security &amp; 2FA</Link>
             <button role="menuitem" type="button" className="danger" onClick={doLogout}><IconLogout width={16} height={16} /> Log out</button>
           </div>
         )}
       </div>
 
-      {searchOpen && <SearchPalette nav={nav} onClose={() => setSearchOpen(false)} />}
+      {searchOpen && <SearchPalette nav={nav} securityHref={securityHref} onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }
 
 // Quick "jump to page" palette.
-function SearchPalette({ nav, onClose }) {
+function SearchPalette({ nav, securityHref, onClose }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [i, setI] = useState(0);
@@ -190,7 +190,7 @@ function SearchPalette({ nav, onClose }) {
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const items = useMemo(() => {
-    const all = [...nav, { href: "/account/security", label: "Security & 2FA" }];
+    const all = [...nav, { href: securityHref || "/account/security", label: "Security & 2FA" }];
     const s = q.trim().toLowerCase();
     return s ? all.filter((n) => n.label.toLowerCase().includes(s)) : all;
   }, [nav, q]);

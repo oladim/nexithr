@@ -120,6 +120,8 @@ export default function AiInterviewPage() {
   const [passMark, setPassMark] = useState(AI_PASS_MARK); // "ready" band threshold
   const [foundationalMark, setFoundationalMark] = useState(60);
   const [freeRetakes, setFreeRetakes] = useState(1);
+  const [cooldown, setCooldown] = useState({ enabled: true, days: 30 });
+  const [aiPaused, setAiPaused] = useState(null); // null | { message }
   const [requireApproval, setRequireApproval] = useState(false);
   const [pricing, setPricing] = useState({ subscriptionAnnualAmount: 29999, currency: "NGN" });
   const [access, setAccess] = useState(null); // { subscribed, lastAiAttemptAt }
@@ -134,6 +136,8 @@ export default function AiInterviewPage() {
         if (s?.passMarkAi != null) setPassMark(Number(s.passMarkAi));
         if (s?.aiFoundationalMark != null) setFoundationalMark(Number(s.aiFoundationalMark));
         if (s?.freeAiRetakes != null) setFreeRetakes(Number(s.freeAiRetakes));
+        if (s) setCooldown({ enabled: s.aiRetakeCooldownEnabled !== false, days: Number(s.aiRetakeCooldownDays ?? 30) });
+        if (s && s.aiInterviewEnabled === false) setAiPaused({ message: s.aiInterviewPausedMessage || "" });
         if (s?.aiResultRequiresApproval != null) setRequireApproval(!!s.aiResultRequiresApproval);
         if (s) setPricing({ subscriptionAnnualAmount: Number(s.subscriptionAnnualAmount), currency: s.currency || "NGN" });
       } catch { /* keep defaults */ }
@@ -150,11 +154,12 @@ export default function AiInterviewPage() {
   const bandOf = (score) => (score == null ? "foundational" : score >= passMark ? "ready" : score >= foundationalMark ? "close" : "foundational");
 
   // Retake cooldown: the first `freeRetakes` attempts are free; after that,
-  // locked for 30 days unless subscribed.
+  // locked for the admin-set cooldown (default 30 days) unless subscribed.
   const attempts = app.aiInterview?.attempts ?? 0;
   const lastAt = access?.lastAiAttemptAt ? new Date(access.lastAiAttemptAt).getTime() : 0;
-  const nextEligible = lastAt ? lastAt + 30 * 24 * 60 * 60 * 1000 : 0;
-  const retakeLocked = supabaseEnabled && !access?.subscribed && attempts > freeRetakes && lastAt > 0 && Date.now() < nextEligible;
+  const nextEligible = lastAt && cooldown.enabled ? lastAt + cooldown.days * 24 * 60 * 60 * 1000 : 0;
+  const cooldownText = cooldown.days % 30 === 0 ? `${cooldown.days / 30}-month` : `${cooldown.days}-day`;
+  const retakeLocked = supabaseEnabled && cooldown.enabled && !access?.subscribed && attempts > freeRetakes && lastAt > 0 && Date.now() < nextEligible;
   const nextEligibleDate = nextEligible ? new Date(nextEligible).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "";
   const retakesLeft = Math.max(0, freeRetakes - attempts);
 
@@ -496,6 +501,7 @@ export default function AiInterviewPage() {
       teardownVoice();
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       stopMedia();
+      if (data.reason === "paused") { setAiPaused({ message: data.note || "" }); setStep("consent"); return; }
       if (["no-cv", "no-role", "cv-pending", "cv-rejected", "cv-changes"].includes(data.reason)) { setPreBlock(data.reason); setPreNote(data.note || ""); }
       else setBlockedStart(true);
       setStep("consent");
@@ -656,6 +662,39 @@ export default function AiInterviewPage() {
 
   /* =============================== render =============================== */
 
+  // ---- AI interview paused by an admin ----
+  if (step === "consent" && aiPaused) {
+    return (
+      <>
+        <div className="page-head">
+          <h1>AI Interview — temporarily paused</h1>
+          <p>New AI interviews can&apos;t be started right now.</p>
+        </div>
+        <div className="consent-grid">
+          <div className="consent-notice">
+            <h3>Paused by NexIT-Africa</h3>
+            <div className="consent-warn">
+              <IconClock />
+              <span>{aiPaused.message || "We've temporarily paused AI interviews. Your CV and progress are saved — you'll be able to start your interview as soon as it reopens."}</span>
+            </div>
+            <div className="assess-actions">
+              <Link href="/dashboard/interview" className="btn-outline">Back to interviews</Link>
+              <Link href="/dashboard" className="btn-solid">Go to dashboard <IconChevronRight width={16} height={16} /></Link>
+            </div>
+          </div>
+          <div className="device-card">
+            <h4>While you wait</h4>
+            <div className="device-status" style={{ flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+              <span className="d"><i /> Make sure your CV is approved</span>
+              <span className="d"><i /> Check your target role in your profile</span>
+              <span className="d"><i /> Watch your notifications for the reopening</span>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // ---- An APPROVED CV (and a target role) is required before the AI interview ----
   // Demo mode has no reviewer, so there only "a CV exists" is required.
   const cvStatus = app.cv?.status || "";
@@ -740,7 +779,7 @@ export default function AiInterviewPage() {
       <>
         <div className="page-head">
           <h1>AI Interview — retake locked</h1>
-          <p>You&apos;ve already taken the AI interview. You can retake it after a one-month wait, or subscribe for unlimited retakes.</p>
+          <p>You&apos;ve already taken the AI interview. You can retake it after a {cooldownText} wait, or subscribe for unlimited retakes.</p>
         </div>
         <div className="consent-grid">
           <div className="consent-notice">
@@ -764,7 +803,7 @@ export default function AiInterviewPage() {
             <div className="device-status" style={{ flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
               <span className="d"><i /> Unlimited AI interview retakes for 12 months</span>
               <span className="d"><i /> Access to suggested training</span>
-              <span className="d"><i /> No one-month waiting period</span>
+              <span className="d"><i /> No {cooldownText} waiting period</span>
             </div>
           </div>
         </div>
@@ -1140,7 +1179,7 @@ export default function AiInterviewPage() {
                   Work through your plan above (free), then take NexIT&apos;s role-specific training to become job-ready — it includes mentorship and live practical sessions.
                   {retakesLeft > 0
                     ? ` You have ${retakesLeft} free retake${retakesLeft === 1 ? "" : "s"} left.`
-                    : " A subscription removes the one-month retake wait."}
+                    : (cooldown.enabled ? ` A subscription removes the ${cooldownText} retake wait.` : "")}
                 </p>
                 <div className="assess-actions">
                   <Link href="/dashboard/training/specific" className="btn-solid">

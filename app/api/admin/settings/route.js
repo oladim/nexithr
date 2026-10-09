@@ -64,6 +64,31 @@ export async function POST(request) {
     updated_by: me.id,
   };
 
+  // ---- platform switches (0028) ----
+  const bool = (k) => (typeof body[k] === "boolean" ? body[k] : cur[k]);
+  const int = (k, lo, hi) => {
+    const n = Math.round(Number(body[k]));
+    return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : cur[k];
+  };
+  const text = (k, max = 400) => (typeof body[k] === "string" ? body[k].trim().slice(0, max) : (cur[k] || ""));
+  Object.assign(fields, {
+    signups_enabled: bool("signups_enabled"),
+    signups_closed_message: text("signups_closed_message"),
+    require_email_verification: bool("require_email_verification"),
+    ai_interview_enabled: bool("ai_interview_enabled"),
+    ai_interview_paused_message: text("ai_interview_paused_message"),
+    ai_retake_cooldown_enabled: bool("ai_retake_cooldown_enabled"),
+    ai_retake_cooldown_days: int("ai_retake_cooldown_days", 1, 365),
+    interview_reminders_enabled: bool("interview_reminders_enabled"),
+    interview_reminder_hours: int("interview_reminder_hours", 1, 168),
+    training_payments_enabled: bool("training_payments_enabled"),
+    interviewer_payouts_enabled: bool("interviewer_payouts_enabled"),
+    payout_manual_approval: bool("payout_manual_approval"),
+    interviewer_fee_professional: money(body.interviewer_fee_professional, cur.interviewer_fee_professional),
+    interviewer_fee_hr: money(body.interviewer_fee_hr, cur.interviewer_fee_hr),
+    payout_min_amount: money(body.payout_min_amount, cur.payout_min_amount),
+  });
+
   // ---- maintenance ----
   const iso = (v, d) => {
     if (v === null || v === "") return null;

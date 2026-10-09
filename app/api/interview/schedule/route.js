@@ -83,13 +83,17 @@ export async function POST(request) {
     meet_link: meet.meetLink,
     calendar_event_id: meet.eventId,
     booking_group: bookingGroup,
+    start_at: start.toISOString(), // used for reminder emails (0028)
     status: "Confirmed",
   }));
 
   // Insert (with a graceful retry if the 0011 columns aren't present yet).
   let ins = await admin.from("interviews").insert(rows).select();
+  if (ins.error && /start_at/i.test(ins.error.message || "")) {
+    ins = await admin.from("interviews").insert(rows.map(({ start_at, ...r }) => r)).select();
+  }
   if (ins.error && /column .* does not exist/i.test(ins.error.message || "")) {
-    const slim = rows.map(({ meet_link, calendar_event_id, booking_group, ...r }) => r);
+    const slim = rows.map(({ meet_link, calendar_event_id, booking_group, start_at, ...r }) => r);
     ins = await admin.from("interviews").insert(slim).select();
   }
   if (ins.error) return NextResponse.json({ error: ins.error.message }, { status: 500 });

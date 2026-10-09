@@ -11,7 +11,7 @@ import { useAuth } from "@/components/context/AuthContext";
 // Login — exact match to Figma frame 113:551 ("Welcome back!").
 export default function LoginPage() {
   const router = useRouter();
-  const { login, supabaseEnabled } = useAuth();
+  const { login, supabaseEnabled, user, hydrated, role: myRole } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -92,6 +92,12 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
+      {hydrated && user && !twoFA.pending && (
+        <div className="role-note ok" style={{ marginBottom: 16 }}>
+          You&apos;re already signed in as <b>{user.name || user.email}</b>.{" "}
+          <Link href={routeFor(myRole)} className="link">Go to my dashboard</Link>
+        </div>
+      )}
       <h1 className="auth-title">Welcome back!</h1>
       <p className="auth-subtitle">
         NexIT-Africa empower your hiring process with intelligent assessments,

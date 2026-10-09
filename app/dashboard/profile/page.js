@@ -6,6 +6,7 @@ import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadProfileDetails, updateProfile, updateCandidate, uploadAvatar, ROLE_LABELS } from "@/lib/db";
 import { IconUpload, IconCheck, IconBriefcase, IconChart, IconUser } from "@/components/Icons";
+import SettingsCrumb from "@/components/SettingsCrumb";
 
 const COUNTRIES = ["Nigeria", "Ghana", "Kenya", "South Africa", "Egypt"];
 const EXPERIENCE = ["Student / Fresh graduate", "0 – 1 years", "1 – 3 years", "3 – 5 years", "5+ years"];
@@ -142,6 +143,7 @@ export default function ProfilePage() {
 
   return (
     <>
+      <SettingsCrumb current="My profile" onlyWhenFrom />
       <div className="page-head">
         <h1>My Profile</h1>
         <p>Your details power your AI interview and job matching. Keep them up to date.</p>

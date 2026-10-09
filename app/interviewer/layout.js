@@ -13,6 +13,8 @@ import {
   IconSearch,
   IconMenu,
   IconChevronRight,
+  IconUser,
+  IconGear,
 } from "@/components/Icons";
 import StaffGate from "@/components/StaffGate";
 import TwoFactorGate from "@/components/TwoFactorGate";
@@ -26,6 +28,8 @@ const NAV = [
   { href: "/interviewer/interview", label: "Interview", Icon: IconCalendar },
   { href: "/interviewer/earnings", label: "Earnings", Icon: IconCard },
   { href: "/interviewer/notifications", label: "Notifications", Icon: IconBell },
+  { href: "/interviewer/profile", label: "Profile", Icon: IconUser },
+  { href: "/interviewer/settings", label: "Settings", Icon: IconGear },
 ];
 
 export default function InterviewerLayout({ children }) {
@@ -85,9 +89,9 @@ export default function InterviewerLayout({ children }) {
               <span>{interviewerKind} Interviewer</span>
             </div>
           </div>
-          <TopbarActions nav={NAV} notificationsHref="/interviewer/notifications" />
+          <TopbarActions nav={NAV} notificationsHref="/interviewer/notifications" profileHref="/interviewer/profile" settingsHref="/interviewer/settings" securityHref="/interviewer/settings?view=security" />
         </header>
-        <div className="content"><ConsentBanner /><MaintenanceGate><TwoFactorGate><StaffGate>{children}</StaffGate></TwoFactorGate></MaintenanceGate></div>
+        <div className="content"><ConsentBanner href="/interviewer/settings?view=privacy" /><MaintenanceGate><TwoFactorGate><StaffGate>{children}</StaffGate></TwoFactorGate></MaintenanceGate></div>
       </div>
     </div>
   );

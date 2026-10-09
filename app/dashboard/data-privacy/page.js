@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import SettingsCrumb from "@/components/SettingsCrumb";
 
 // Plain-language data & recording notice (NDPR-aligned). Edit the specifics to
 // match your registered data-protection practices before going live.
 export default function DataPrivacyPage() {
   return (
     <div className="assess" style={{ maxWidth: 760 }}>
+      <SettingsCrumb current="Data & recording notice" onlyWhenFrom />
       <div className="page-head">
         <h1>Data &amp; recording notice</h1>
         <p>How NexIT-Africa handles your interview recordings and personal data.</p>

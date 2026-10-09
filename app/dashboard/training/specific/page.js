@@ -19,6 +19,7 @@ export default function SpecificTrainingPage() {
   const [pricing, setPricing] = useState({ trainingDefaultAmount: 450000, trainingFoundationalAmount: 150000, currency: "NGN" });
   const [courses, setCourses] = useState([]);
   const [busyTier, setBusyTier] = useState("");
+  const [enrolClosed, setEnrolClosed] = useState(false); // admin paused training payments
 
   const roleKey = app.candidate?.target_role || signup.targetRole || "";
 
@@ -32,6 +33,7 @@ export default function SpecificTrainingPage() {
           currency: s.settings.currency || "NGN",
         });
         if (Array.isArray(s?.roles)) setRoles(s.roles);
+        if (s?.settings?.trainingPaymentsEnabled === false) setEnrolClosed(true);
       } catch { /* defaults */ }
       if (supabaseEnabled) {
         try { setAccess(await (await fetch("/api/me/access")).json()); } catch { setAccess(null); }
@@ -98,8 +100,16 @@ export default function SpecificTrainingPage() {
         <p>Curated by the NexIT team to close exactly the gaps this role needs — with mentorship and live practical sessions.</p>
       </div>
 
+      {enrolClosed && (
+        <div className="consent-warn" style={{ margin: "0 0 16px" }}>
+          <IconLock />
+          <span><b>Enrolment is temporarily closed.</b> You can&apos;t pay for training right now — check back soon, or request a course below and we&apos;ll let you know when it opens.</span>
+        </div>
+      )}
+
       <div className="board-grid" style={{ alignItems: "stretch" }}>
         <TierCard
+          closed={enrolClosed}
           name="Foundational"
           price={formatMoney(foundationalPrice, pricing.currency)}
           blurb="Build the base. Core concepts, guided projects and group support to get you to job-ready fundamentals."
@@ -114,6 +124,7 @@ export default function SpecificTrainingPage() {
           blurb="The full placement-focused programme: deep role-specific training, 1:1 mentorship and attended live practical sessions."
           points={["Everything in Foundational", "1:1 mentorship", "Live practical sessions (attendance required)", "Placement support"]}
           busy={busyTier === "intensive"}
+          closed={enrolClosed}
           onBuy={() => buy("intensive")}
         />
       </div>
@@ -138,7 +149,7 @@ export default function SpecificTrainingPage() {
   );
 }
 
-function TierCard({ name, price, blurb, points, highlight, busy, onBuy }) {
+function TierCard({ name, price, blurb, points, highlight, busy, onBuy, closed }) {
   return (
     <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 10, borderColor: highlight ? "var(--primary, #007bff)" : undefined, borderWidth: highlight ? 2 : 1 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -149,8 +160,8 @@ function TierCard({ name, price, blurb, points, highlight, busy, onBuy }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {points.map((p, i) => <span key={i} className="d" style={{ fontSize: 13 }}><IconCheck width={13} height={13} style={{ marginRight: 6 }} /> {p}</span>)}
       </div>
-      <button className={highlight ? "btn-solid" : "btn-outline"} style={{ marginTop: "auto", justifyContent: "center" }} disabled={busy} onClick={onBuy}>
-        {busy ? "Starting…" : `Enrol — ${price}`}
+      <button className={highlight ? "btn-solid" : "btn-outline"} style={{ marginTop: "auto", justifyContent: "center" }} disabled={busy || closed} onClick={onBuy}>
+        {closed ? "Enrolment closed" : busy ? "Starting…" : `Enrol — ${price}`}
       </button>
     </div>
   );

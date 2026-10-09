@@ -27,6 +27,9 @@ export async function POST(request) {
   const settings = await loadSettings(admin);
   const tier = body?.tier === "foundational" ? "foundational" : "intensive";
   let amount = Number(settings.subscription_annual_amount);
+  if (purpose === "training" && settings.training_payments_enabled === false) {
+    return NextResponse.json({ error: "Training enrolment is temporarily closed. Please check back soon.", closed: true }, { status: 403 });
+  }
   if (purpose === "training") {
     if (!roleKey) return NextResponse.json({ error: "roleKey is required for training" }, { status: 400 });
     const { data: role } = await admin.from("role_requirements").select("training_amount, foundational_amount, title, enabled").eq("role_key", roleKey).maybeSingle();

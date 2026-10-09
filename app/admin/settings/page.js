@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/context/AuthContext";
-import { SETTINGS_GROUPS } from "@/components/admin/data";
-import SettingsToggles from "@/components/SettingsToggles";
 import { DEFAULT_SETTINGS } from "@/lib/db";
 import { IconCheck } from "@/components/Icons";
 import { ALERT_CATEGORIES } from "@/lib/alertCategories";
@@ -89,7 +87,7 @@ export default function AdminSettings() {
         <a href="#thresholds">Thresholds &amp; pricing</a>
         <a href="#maintenance">Maintenance mode</a>
         <a href="#alerts">Email alerts &amp; test email</a>
-        <a href="#other">Other</a>
+        <a href="#other">Sign-ups, interviews &amp; payouts</a>
       </nav>
 
       <div className="card pad set-card" id="thresholds">
@@ -194,10 +192,7 @@ export default function AdminSettings() {
         <AlertTools supabaseEnabled={supabaseEnabled} />
       </div>
 
-      <div className="card pad set-card" id="other">
-        <h3 className="card-title">Other configuration</h3>
-        <SettingsToggles groups={SETTINGS_GROUPS} />
-      </div>
+      <PlatformSwitches s={s} setS={setS} loaded={loaded} busy={busy} where={where} save={save} Feedback={Feedback} />
     </>
   );
 }
@@ -391,6 +386,115 @@ function MaintenancePanel({ s, loaded, busy, save, where, Feedback }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Platform switches — each one changes real behaviour (see SETUP.md 0028).
+function Switch({ label, help, checked, onChange, disabled, children }) {
+  return (
+    <div className="sw-row">
+      <div className="sw-main">
+        <div className="sw-text">
+          <span className="sw-label">{label}</span>
+          {help && <span className="sw-help">{help}</span>}
+        </div>
+        <button type="button" role="switch" aria-checked={!!checked} aria-label={label}
+          className={`toggle ${checked ? "on" : ""}`} disabled={disabled} onClick={() => onChange(!checked)} />
+      </div>
+      {children && <div className="sw-extra">{children}</div>}
+    </div>
+  );
+}
+
+function PlatformSwitches({ s, setS, loaded, busy, where, save, Feedback }) {
+  const on = (k) => s[k] !== false;
+  const flip = (k) => (v) => setS((p) => ({ ...p, [k]: v }));
+  const val = (k) => (e) => setS((p) => ({ ...p, [k]: e.target.value }));
+  const dis = !loaded || busy;
+  const cur = s.currency || "NGN";
+  return (
+    <div className="card pad set-card" id="other">
+      <h3 className="card-title">Sign-ups, interviews &amp; payouts</h3>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>Changes take effect as soon as you save.</p>
+
+      <h4 className="sw-group">Sign-ups &amp; accounts</h4>
+      <Switch label="Allow new sign-ups" checked={on("signups_enabled")} onChange={flip("signups_enabled")} disabled={dis}
+        help={on("signups_enabled") ? "Anyone can create a candidate, interviewer or employer account." : "Sign-up is closed (email, Google and Apple). Existing users can still log in; admins can still add users."}>
+        {!on("signups_enabled") && (
+          <div className="field field-simple">
+            <label htmlFor="sw-closed">Message on the sign-up page (optional)</label>
+            <input id="sw-closed" value={s.signups_closed_message || ""} onChange={val("signups_closed_message")} disabled={dis} placeholder="We're not accepting new accounts until 1 November." />
+          </div>
+        )}
+      </Switch>
+      <Switch label="Require email verification" checked={on("require_email_verification")} onChange={flip("require_email_verification")} disabled={dis}
+        help={on("require_email_verification")
+          ? "New users must confirm their email before they can sign in. Keep Supabase → Authentication → Email → “Confirm email” turned ON."
+          : "New users are signed in straight after sign-up — their email is confirmed automatically. (Keep “Confirm email” ON in Supabase; the app skips it for you.)"} />
+
+      <h4 className="sw-group">Interviews</h4>
+      <Switch label="AI interview enabled" checked={on("ai_interview_enabled")} onChange={flip("ai_interview_enabled")} disabled={dis}
+        help={on("ai_interview_enabled") ? "Candidates with an approved CV can start the AI interview." : "No one can start a new AI interview. Interviews already in progress can finish."}>
+        {!on("ai_interview_enabled") && (
+          <div className="field field-simple">
+            <label htmlFor="sw-aimsg">Message to candidates (optional)</label>
+            <input id="sw-aimsg" value={s.ai_interview_paused_message || ""} onChange={val("ai_interview_paused_message")} disabled={dis} placeholder="AI interviews reopen on Monday." />
+          </div>
+        )}
+      </Switch>
+      <Switch label="Wait before AI retakes" checked={on("ai_retake_cooldown_enabled")} onChange={flip("ai_retake_cooldown_enabled")} disabled={dis}
+        help={on("ai_retake_cooldown_enabled")
+          ? `After their ${Number(s.free_ai_retakes ?? 1)} free retake(s), unsubscribed candidates wait before trying again. Subscribers never wait.`
+          : "No waiting period — candidates can retake the AI interview any time."}>
+        {on("ai_retake_cooldown_enabled") && (
+          <div className="field field-simple sw-num">
+            <label htmlFor="sw-days">Wait (days)</label>
+            <input id="sw-days" type="number" min="1" max="365" value={s.ai_retake_cooldown_days ?? 30} onChange={val("ai_retake_cooldown_days")} disabled={dis} />
+          </div>
+        )}
+      </Switch>
+      <Switch label="Interview reminders" checked={on("interview_reminders_enabled")} onChange={flip("interview_reminders_enabled")} disabled={dis}
+        help={on("interview_reminders_enabled")
+          ? "The candidate and the assigned interviewer get an email and a notification before each Professional/HR interview. Needs CRON_SECRET set in Netlify (see SETUP.md)."
+          : "No reminder emails are sent."}>
+        {on("interview_reminders_enabled") && (
+          <div className="field field-simple sw-num">
+            <label htmlFor="sw-hours">Send (hours before)</label>
+            <input id="sw-hours" type="number" min="1" max="168" value={s.interview_reminder_hours ?? 24} onChange={val("interview_reminder_hours")} disabled={dis} />
+          </div>
+        )}
+      </Switch>
+
+      <h4 className="sw-group">Payments</h4>
+      <Switch label="Training payments" checked={on("training_payments_enabled")} onChange={flip("training_payments_enabled")} disabled={dis}
+        help={on("training_payments_enabled") ? "Candidates can pay for Foundational and Intensive training." : "Enrolment is closed — the pay buttons are disabled. Anyone who already paid keeps access."} />
+      <Switch label="Interviewer payouts" checked={on("interviewer_payouts_enabled")} onChange={flip("interviewer_payouts_enabled")} disabled={dis}
+        help={on("interviewer_payouts_enabled") ? "Interviewers can withdraw their earnings to their bank account." : "Withdrawals are paused. Interviewers keep earning; their balance is kept."}>
+        <div className="field-row">
+          <div className="field field-simple">
+            <label htmlFor="sw-fee-p">Fee per Professional interview ({cur})</label>
+            <input id="sw-fee-p" type="number" min="0" value={s.interviewer_fee_professional ?? 0} onChange={val("interviewer_fee_professional")} disabled={dis} />
+          </div>
+          <div className="field field-simple">
+            <label htmlFor="sw-fee-h">Fee per HR interview ({cur})</label>
+            <input id="sw-fee-h" type="number" min="0" value={s.interviewer_fee_hr ?? 0} onChange={val("interviewer_fee_hr")} disabled={dis} />
+          </div>
+          <div className="field field-simple">
+            <label htmlFor="sw-min">Minimum payout ({cur})</label>
+            <input id="sw-min" type="number" min="0" value={s.payout_min_amount ?? 0} onChange={val("payout_min_amount")} disabled={dis} />
+          </div>
+        </div>
+      </Switch>
+      <Switch label="Manual payout approval" checked={on("payout_manual_approval")} onChange={flip("payout_manual_approval")} disabled={dis}
+        help={on("payout_manual_approval")
+          ? "Every withdrawal waits for an admin to approve it in Payouts before it's sent."
+          : "Withdrawals are sent straight away through Paystack Transfers (if Paystack isn't connected they wait in Payouts to be paid by bank)."} />
+
+      <Feedback at="other" />
+      <button className="btn-solid" style={{ marginTop: 16 }} disabled={dis} onClick={() => save({}, "other")}>
+        <IconCheck width={16} height={16} /> {busy && where === "other" ? "Saving…" : "Save these settings"}
+      </button>
     </div>
   );
 }

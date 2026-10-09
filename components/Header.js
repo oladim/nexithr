@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { IconMenu, IconX } from "./Icons";
+import { useAuth } from "@/components/context/AuthContext";
+import { portalHome } from "@/lib/portal";
 
 const LINKS = [
   { href: "#home", label: "Home" },
@@ -17,6 +19,12 @@ const LINKS = [
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  // Signed-in visitors see their account instead of "Sign in".
+  const { user, hydrated, role } = useAuth();
+  const signedIn = hydrated && !!user;
+  const home = portalHome(role);
+  const first = (user?.name || "").split(" ")[0] || "Account";
+  const initials = (user?.name || "U").split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -39,8 +47,20 @@ export default function Header() {
         </nav>
 
         <div className="nav-cta">
-          <Link href="/login" className="btn btn-ghost-sm">Sign in</Link>
-          <Link href="/signup" className="btn btn-fill">Get Started</Link>
+          {signedIn ? (
+            <>
+              <Link href={home} className="nav-me" title={`Signed in as ${user.name || user.email}`}>
+                <span className="nav-me-pic" aria-hidden="true">{initials}</span>
+                <span className="nav-me-nm">Hi, {first}</span>
+              </Link>
+              <Link href={home} className="btn btn-fill">Go to my dashboard</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="btn btn-ghost-sm">Sign in</Link>
+              <Link href="/signup" className="btn btn-fill">Get Started</Link>
+            </>
+          )}
         </div>
 
         <button className="nav-burger" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
@@ -53,8 +73,14 @@ export default function Header() {
           <a key={l.href} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>
         ))}
         <div className="nav-drawer-cta">
-          <Link href="/login" className="btn btn-ghost-sm" onClick={() => setOpen(false)}>Sign in</Link>
-          <Link href="/signup" className="btn btn-fill" onClick={() => setOpen(false)}>Get Started</Link>
+          {signedIn ? (
+            <Link href={home} className="btn btn-fill" onClick={() => setOpen(false)}>Go to my dashboard</Link>
+          ) : (
+            <>
+              <Link href="/login" className="btn btn-ghost-sm" onClick={() => setOpen(false)}>Sign in</Link>
+              <Link href="/signup" className="btn btn-fill" onClick={() => setOpen(false)}>Get Started</Link>
+            </>
+          )}
         </div>
       </div>
     </header>

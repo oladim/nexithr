@@ -75,6 +75,7 @@ export async function POST(request) {
     email,
     password,
     email_confirm: true,
+    app_metadata: { admin_created: true }, // passes the "sign-ups closed" guard (0028)
     user_metadata: {
       full_name: fullName || email.split("@")[0],
       role: role === "admin" ? "candidate" : role, // trigger-safe; fixed up next

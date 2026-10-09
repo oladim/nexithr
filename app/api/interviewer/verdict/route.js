@@ -5,6 +5,8 @@ import { synthesizeNotes } from "@/lib/stageResult";
 import { notifyUser } from "@/lib/notify";
 import { getOrIssueCertificate } from "@/lib/certificate";
 import { alertAdmins } from "@/lib/adminAlert";
+import { loadSettings } from "@/lib/db";
+import { creditEarning } from "@/lib/payouts";
 
 export const runtime = "nodejs";
 
@@ -85,6 +87,18 @@ export async function POST(request) {
     summary: synth.summary || (passed ? "The panel recommends advancing this candidate." : "The panel does not recommend advancing at this stage."),
   });
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+  // 3b) Pay the interviewer their fee for this interview (admins aren't paid).
+  if (!isAdmin) {
+    try {
+      const settings = await loadSettings(admin);
+      const { data: cp } = await admin.from("profiles").select("full_name").eq("id", candidateId).maybeSingle();
+      await creditEarning(admin, {
+        interviewerId: me.id, sourceKey: `verdict:${candidateId}:${stage}:${attemptNo}`,
+        candidateId, stage, settings, candidateName: cp?.full_name || "",
+      });
+    } catch { /* never block the verdict on bookkeeping */ }
+  }
 
   // 4) Close the booked interview(s) for this stage.
   await admin.from("interviews").update({ status: "Completed" }).eq("candidate_id", candidateId).eq("type", stage).eq("status", "Confirmed");

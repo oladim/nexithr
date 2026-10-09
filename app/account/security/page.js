@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/components/context/AuthContext";
 import TwoFactorSettings from "@/components/TwoFactorSettings";
+import SettingsCrumb from "@/components/SettingsCrumb";
 
 // Standalone security page reachable by any signed-in user (any portal).
 export default function SecurityPage() {
@@ -11,6 +12,7 @@ export default function SecurityPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <SettingsCrumb current="Security & 2FA" onlyWhenFrom />
       <div className="page-head">
         <h1>Account security</h1>
         <p>Manage two-factor authentication for your NexIT-Africa account.</p>

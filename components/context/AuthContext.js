@@ -225,6 +225,21 @@ export function AuthProvider({ children }) {
         await bootstrapFromSupabase();
         return { needsConfirm: false };
       }
+      // Admin switched email verification off → the server confirms this
+      // brand-new account and we sign straight in.
+      if (data?.user?.id) {
+        try {
+          const r = await fetch("/api/auth/autoconfirm", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: data.user.id }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.confirmed) {
+            const { error: sErr } = await supabase.auth.signInWithPassword({ email: signup.email, password: signup.password });
+            if (!sErr) { await bootstrapFromSupabase(); return { needsConfirm: false }; }
+          }
+        } catch { /* fall back to email confirmation */ }
+      }
       return { needsConfirm: true };
     }
     completeSignup();

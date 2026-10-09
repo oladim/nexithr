@@ -106,10 +106,10 @@ export default function DashboardLayout({ children }) {
               <span>Candidate</span>
             </div>
           </div>
-          <TopbarActions nav={NAV} profileHref="/dashboard/profile" settingsHref="/dashboard/settings" />
+          <TopbarActions nav={NAV} profileHref="/dashboard/profile" settingsHref="/dashboard/settings" securityHref="/dashboard/settings?view=security" />
         </header>
 
-        <div className="content"><ConsentBanner href="/dashboard/settings?tab=Privacy" /><MaintenanceGate><TwoFactorGate>{children}</TwoFactorGate></MaintenanceGate></div>
+        <div className="content"><ConsentBanner href="/dashboard/settings?view=privacy" /><MaintenanceGate><TwoFactorGate>{children}</TwoFactorGate></MaintenanceGate></div>
       </div>
     </div>
   );

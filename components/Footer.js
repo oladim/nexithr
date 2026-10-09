@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { COMPANY } from "@/lib/company";
 import { IconInstagram, IconX, IconFacebook, IconLinkedin } from "./Icons";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -16,9 +17,9 @@ export default function Footer() {
               Skills-first tech hiring — diagnose, train, and get verified talent placed, all in one platform.
             </p>
             <div className="footer-contact">
-              <p><span>Address</span>No 1B Simeon Adeogun Close, Independence Estate, New Bodija, Ibadan, Nigeria</p>
-              <p><span>Phone</span><a href="tel:+2348066932357">+234 806 693 2357</a></p>
-              <p><span>Email</span><a href="mailto:support@nexitafrica.com">support@nexitafrica.com</a></p>
+              <p><span>Address</span>{COMPANY.addressLines.join(", ")}</p>
+              <p><span>Phone</span><a href={COMPANY.phoneHref}>{COMPANY.phone}</a></p>
+              <p><span>Email</span><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a></p>
             </div>
             <div className="socials">
               <a href="#" aria-label="Instagram"><IconInstagram width={18} height={18} /></a>

@@ -58,5 +58,13 @@ function toClient(s) {
     oauthGoogleEnabled: !!s.oauth_google_enabled,
     oauthAppleEnabled: !!s.oauth_apple_enabled,
     maintenance: maintenanceFromSettings(s),
+    signupsEnabled: s.signups_enabled !== false,
+    signupsClosedMessage: s.signups_closed_message || "",
+    requireEmailVerification: s.require_email_verification !== false,
+    aiInterviewEnabled: s.ai_interview_enabled !== false,
+    aiInterviewPausedMessage: s.ai_interview_paused_message || "",
+    aiRetakeCooldownEnabled: s.ai_retake_cooldown_enabled !== false,
+    aiRetakeCooldownDays: Number(s.ai_retake_cooldown_days ?? 30),
+    trainingPaymentsEnabled: s.training_payments_enabled !== false,
   };
 }

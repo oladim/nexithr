@@ -56,6 +56,15 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Admin can close sign-ups (Settings → Platform switches).
+  const [closed, setClosed] = useState(null); // null | { message }
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    fetch("/api/settings", { cache: "no-store" }).then((r) => r.json())
+      .then((d) => { if (d?.settings?.signupsEnabled === false) setClosed({ message: d.settings.signupsClosedMessage || "" }); })
+      .catch(() => {});
+  }, [supabaseEnabled]);
+
   const role = signup.role || "candidate";
   const steps = stepsFor(role);
   const key = steps[step];
@@ -69,7 +78,7 @@ export default function SignupPage() {
       setBusy(true);
       const res = await signUpUser();
       setBusy(false);
-      if (res?.error) { setError(res.error); return; }
+      if (res?.error) { setError(/sign-ups are currently closed|database error saving new user/i.test(res.error) ? "Sign-ups are currently closed. Please try again later." : res.error); return; }
       if (res.needsConfirm) { router.push("/verify-email"); return; }
       // Session created: staff → their portal (shows pending gate), else congrats.
       router.push(role === "recruiter" ? "/recruiter" : role === "professional" || role === "hr" ? "/interviewer" : "/congratulations");
@@ -77,6 +86,19 @@ export default function SignupPage() {
     }
     router.push("/verify-email");
   };
+
+  if (closed) {
+    return (
+      <AuthLayout>
+        <h1 className="auth-title">Sign-ups are paused</h1>
+        <p className="auth-subtitle">
+          {closed.message || "We're not accepting new accounts at the moment. Please check back soon — existing members can still log in."}
+        </p>
+        <Link href="/login" className="auth-btn" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>Go to login</Link>
+        <p className="auth-alt">Questions? <a href="mailto:support@nexitafrica.com">support@nexitafrica.com</a></p>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout>

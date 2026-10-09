@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { IconMessage, IconCheck, IconArrowUpRight } from "./Icons";
+import { useAuth } from "@/components/context/AuthContext";
+import { portalHome } from "@/lib/portal";
 
 export default function Hero() {
+  const { user, hydrated, role } = useAuth();
+  const signedIn = hydrated && !!user;
   return (
     <section className="hero" id="home">
       <div className="hero-bg-grid" aria-hidden="true" />
@@ -26,10 +30,18 @@ export default function Hero() {
           </p>
 
           <div className="hero-actions">
-            <Link href="/signup" className="btn btn-fill btn-lg">
-              Start free <IconArrowUpRight width={18} height={18} />
-            </Link>
-            <Link href="/login" className="btn btn-stroke btn-lg">I have an account</Link>
+            {signedIn ? (
+              <Link href={portalHome(role)} className="btn btn-fill btn-lg">
+                Continue to my dashboard <IconArrowUpRight width={18} height={18} />
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup" className="btn btn-fill btn-lg">
+                  Start free <IconArrowUpRight width={18} height={18} />
+                </Link>
+                <Link href="/login" className="btn btn-stroke btn-lg">I have an account</Link>
+              </>
+            )}
           </div>
 
           <ul className="hero-trust">

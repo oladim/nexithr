@@ -169,7 +169,8 @@ async function persistAiResult(me, assessment) {
 
 // Enforce the retake cooldown server-side (defense-in-depth; the client also
 // hides the start button). First `free_ai_retakes` attempts are free; after
-// that it's locked for 30 days unless the candidate is subscribed.
+// that it's locked for `ai_retake_cooldown_days` (admin setting) unless the
+// candidate is subscribed or the cooldown is switched off.
 async function retakeBlock(me) {
   const admin = getServiceSupabase();
   if (!admin || !me || me.role !== "candidate") return null;
@@ -180,7 +181,9 @@ async function retakeBlock(me) {
     const attempts = aiRow?.attempts ?? 0;
     const free = Number(settings.free_ai_retakes ?? 1);
     const lastAt = access.lastAiAttemptAt ? new Date(access.lastAiAttemptAt).getTime() : 0;
-    const nextEligible = lastAt ? lastAt + 30 * 24 * 3600 * 1000 : 0;
+    if (settings.ai_retake_cooldown_enabled === false) return null;
+    const days = Math.max(1, Number(settings.ai_retake_cooldown_days ?? 30));
+    const nextEligible = lastAt ? lastAt + days * 24 * 3600 * 1000 : 0;
     if (!access.subscribed && attempts > free && lastAt > 0 && Date.now() < nextEligible) {
       return { blocked: true, reason: "cooldown", nextEligibleAt: new Date(nextEligible).toISOString() };
     }
@@ -194,6 +197,10 @@ async function retakeBlock(me) {
 async function prerequisiteBlock(me) {
   const admin = getServiceSupabase();
   if (!admin || !me || me.role !== "candidate") return null;
+  try {
+    const st = await loadSettings(admin);
+    if (st.ai_interview_enabled === false) return { blocked: true, reason: "paused", note: st.ai_interview_paused_message || "" };
+  } catch { /* fall through */ }
   try {
     const [{ data: cv }, { data: cand }] = await Promise.all([
       admin.from("cvs").select("id, status, review_note").eq("candidate_id", me.id).order("uploaded_at", { ascending: false }).limit(1).maybeSingle(),

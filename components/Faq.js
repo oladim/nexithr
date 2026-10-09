@@ -5,7 +5,7 @@ import Image from "next/image";
 import Reveal from "./Reveal";
 import { IconToggle } from "./Icons";
 
-const FAQS = [
+export const FAQS = [
   {
     q: "What exactly is NexIT-Africa?",
     a: "NexIT-Africa is a tech recruitment and training platform. It takes you through an AI interview that diagnoses your real level, role-specific training that closes your gaps, and professional + HR interviews — then places you on a verified candidate board where employers hire you directly.",
