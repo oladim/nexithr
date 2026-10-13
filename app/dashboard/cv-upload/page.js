@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import LevelSuggestion from "@/components/dashboard/LevelSuggestion";
 import { useAuth } from "@/components/context/AuthContext";
 import { TextField, SelectField } from "@/components/auth/Field";
 import { ROLE_LABELS } from "@/lib/db";
@@ -77,6 +78,7 @@ export default function CvUploadPage() {
             : "Didn't upload during registration? Add your CV here to unlock your AI interview."}
         </p>
       </div>
+      <LevelSuggestion />
 
       {showForm ? (
         <UploadForm

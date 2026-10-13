@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import LevelSuggestion from "@/components/dashboard/LevelSuggestion";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
@@ -133,6 +134,8 @@ export default function DashboardHome() {
           </span>
         </div>
       </div>
+
+      <LevelSuggestion />
 
       {/* Certificate — unlocked once every stage is passed */}
       {app.aiInterview?.passed && app.stages?.Professional?.passed && app.stages?.HR?.passed && (

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify";
+import { ROLE_LABELS } from "@/lib/db";
 
-const STATUSES = ["Approved", "Rejected", "Changes requested", "Pending review"];
+const STATUSES = ["Approved", "Rejected", "Changes requested", "Pending review", "Level suggested"];
 
 // POST /api/admin/cv-review
 // { cvId, candidateId, status, note }  — admins only.
@@ -34,12 +35,42 @@ export async function POST(request) {
   const admin = getServiceSupabase();
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
+  // Suggesting a lower level: it must be the SAME role, a lower level, and open.
+  let suggested = null, current = null;
+  if (status === "Level suggested") {
+    if (!reason) return NextResponse.json({ error: "Add a note explaining the suggested level." }, { status: 400 });
+    const { data: cand } = await admin.from("candidates").select("target_role").eq("id", candidateId).maybeSingle();
+    const keys = [cand?.target_role, body?.suggestedRole].filter(Boolean);
+    const { data: rows } = await admin.from("role_requirements").select("role_key, title, base_role, level, enabled").in("role_key", keys);
+    current = rows?.find((r) => r.role_key === cand?.target_role);
+    suggested = rows?.find((r) => r.role_key === body?.suggestedRole);
+    const order = ["junior", "mid", "senior"];
+    if (!current || !suggested || suggested.base_role !== current.base_role || order.indexOf(suggested.level) >= order.indexOf(current.level) || suggested.enabled === false) {
+      return NextResponse.json({ error: "The suggested level must be a lower, open level of the candidate's current role." }, { status: 400 });
+    }
+  }
+
   // 1) Update the CV row.
-  const { error: upErr } = await admin
-    .from("cvs")
-    .update({ status, review_note: reason || null, reviewed_by: me.id, reviewed_at: new Date().toISOString() })
-    .eq("id", cvId);
+  const fields = { status, review_note: reason || null, reviewed_by: me.id, reviewed_at: new Date().toISOString() };
+  const levelFields = status === "Level suggested"
+    ? { suggested_role: suggested.role_key, original_role: current.role_key, level_response: null, level_responded_at: null }
+    : { suggested_role: null };
+  let { error: upErr } = await admin.from("cvs").update({ ...fields, ...levelFields }).eq("id", cvId);
+  if (upErr && status !== "Level suggested" && /suggested_role/.test(upErr.message || "")) {
+    ({ error: upErr } = await admin.from("cvs").update(fields).eq("id", cvId)); // pre-0036
+  }
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+
+  if (status === "Level suggested") {
+    const res = await notifyUser(admin, {
+      userId: candidateId,
+      title: `We suggest the ${suggested.title} level`,
+      body: `${reason}\n\nOpen your CV page to accept ${suggested.title} — your CV is approved at that level and your AI interview unlocks straight away — or keep ${current.title}.`,
+      emailSubject: "NexIT-Africa — a level suggestion for your application",
+      cta: { label: "Review the suggestion", path: "/dashboard/cv-upload" },
+    });
+    return NextResponse.json({ ok: true, emailSent: res.emailSent, emailReason: res.emailSent ? undefined : res.reason });
+  }
 
   // 2) Tell the candidate (in-app + email), including the reviewer's reason.
   const verb =

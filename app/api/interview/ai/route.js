@@ -217,6 +217,7 @@ async function prerequisiteBlock(me) {
     if (!cv) return { blocked: true, reason: "no-cv" };
     if (cv.status === "Rejected") return { blocked: true, reason: "cv-rejected", note: cv.review_note || "" };
     if (cv.status === "Changes requested") return { blocked: true, reason: "cv-changes", note: cv.review_note || "" };
+    if (cv.status === "Level suggested") return { blocked: true, reason: "level-suggested", note: cv.review_note || "" };
     if (cv.status !== "Approved") return { blocked: true, reason: "cv-pending" };
     if (!cand?.target_role) return { blocked: true, reason: "no-role" };
   } catch { /* fail open — the client gate still applies */ }

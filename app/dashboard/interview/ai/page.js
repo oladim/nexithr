@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import LevelSuggestion from "@/components/dashboard/LevelSuggestion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, AI_PASS_MARK } from "@/components/context/AuthContext";
@@ -502,7 +503,7 @@ export default function AiInterviewPage() {
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       stopMedia();
       if (data.reason === "paused") { setAiPaused({ message: data.note || "" }); setStep("consent"); return; }
-      if (["no-cv", "no-role", "cv-pending", "cv-rejected", "cv-changes"].includes(data.reason)) { setPreBlock(data.reason); setPreNote(data.note || ""); }
+      if (["no-cv", "no-role", "cv-pending", "cv-rejected", "cv-changes", "level-suggested"].includes(data.reason)) { setPreBlock(data.reason); setPreNote(data.note || ""); }
       else setBlockedStart(true);
       setStep("consent");
       return;
@@ -702,6 +703,7 @@ export default function AiInterviewPage() {
     !app.cv || preBlock === "no-cv" ? "no-cv"
     : supabaseEnabled && (preBlock === "cv-rejected" || cvStatus === "Rejected") ? "cv-rejected"
     : supabaseEnabled && (preBlock === "cv-changes" || cvStatus === "Changes requested") ? "cv-changes"
+    : supabaseEnabled && (preBlock === "level-suggested" || cvStatus === "Level suggested") ? "level-suggested"
     : supabaseEnabled && (preBlock === "cv-pending" || (cvStatus && cvStatus !== "Approved")) ? "cv-pending"
     : supabaseEnabled && (preBlock === "no-role" || (app.candidate && !app.candidate.target_role)) ? "no-role"
     : "";
@@ -728,6 +730,11 @@ export default function AiInterviewPage() {
         h3: "Changes requested", msg: "Our reviewer has asked for some changes to your CV. Please read the note below, update your CV and upload it again.",
         href: "/dashboard/cv-upload", btn: "Upload an updated CV",
       },
+      "level-suggested": {
+        h1: "choose your level", sub: "Our CV review suggests a different starting level for your role.",
+        h3: "Level suggestion waiting", msg: "Accept the suggested level and your AI interview unlocks straight away, or keep your level and our team will review your CV again.",
+        href: "/dashboard/cv-upload", btn: "View my CV",
+      },
       "no-role": {
         h1: "choose your target role first", sub: "Your AI interview is built around your target role. Pick one from your profile to continue.",
         h3: "No target role selected", msg: "Choose one of the roles currently open on NexIT-Africa. If your field isn't open yet, we'll notify you when it becomes available.",
@@ -749,6 +756,7 @@ export default function AiInterviewPage() {
               {gate === "cv-pending" ? <IconClock /> : <IconLock />}
               <span>{G.msg}</span>
             </div>
+            {gate === "level-suggested" && <div style={{ marginTop: 14 }}><LevelSuggestion /></div>}
             {showNote && (
               <div className="cv-review-note warn" style={{ marginTop: 14 }}>
                 <b>{gate === "cv-rejected" ? "Why your CV was rejected" : "What to change"}</b>

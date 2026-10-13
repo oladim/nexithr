@@ -53,10 +53,17 @@ export async function POST(request) {
     }
   }
 
-  const analysis = await analyzeCv({ cvText, roleReq, candidateSkills, experienceYears });
+  // The same role at its other levels (Junior / Mid / Senior) so the AI can
+  // tell if the CV fits a lower level better than the one applied for.
+  const levels = roleReq?.base_role
+    ? Object.values(byKey).filter((r) => r.base_role === roleReq.base_role && r.level).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    : [];
+  const analysis = await analyzeCv({ cvText, roleReq, candidateSkills, experienceYears, levels });
   return NextResponse.json({
     ok: true,
     analysis,
+    appliedLevel: roleReq?.level || null,
+    levels: levels.map((l) => ({ roleKey: l.role_key, title: l.title, level: l.level })),
     fileFound,
     textChars: cvText.length,
     note:

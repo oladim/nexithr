@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadCvSubmissions, cvSignedUrl, loadRoleRequirements } from "@/lib/db";
-import { computeCvMatch, suggestedNote, DEFAULT_REQS_BY_KEY } from "@/lib/cvMatch";
+import { computeCvMatch, DEFAULT_REQS_BY_KEY } from "@/lib/cvMatch";
 import { IconFileText, IconDownload, IconCheck, IconRefresh, IconX, IconBolt } from "@/components/Icons";
 
 // Demo submissions so the queue isn't empty without a backend.
@@ -14,7 +14,35 @@ const DEMO = [
   { id: "d3", candidateId: "d3", name: "Rose Adeyemi", email: "rose@nexit.africa", roleKey: "product", targetRole: "Product & Design", skills: ["Figma", "Prototyping", "User Research", "Design Systems"], experience: "4 Years", fileName: "Rose_Adeyemi_CV.pdf", industry: "Product & Design", jobType: "Contract", status: "Approved", reviewNote: "Great fit — advanced to AI interview." },
 ];
 
-const STATUS_CLASS = { "Approved": "done", "Rejected": "pending", "Changes requested": "pending", "Pending review": "pending" };
+const STATUS_CLASS = { "Approved": "done", "Rejected": "failed", "Changes requested": "pending", "Pending review": "pending", "Level suggested": "approved" };
+
+// Note templates — the note changes with the decision the reviewer picks.
+const list = (a, n = 5) => (a || []).slice(0, n).join(", ");
+function decisionNote(decision, { match, role, suggestion }) {
+  const matched = list(match?.matched, 4);
+  const missing = list(match?.missing, 5);
+  switch (decision) {
+    case "approve":
+      return `Thanks for applying for ${role}. Your CV meets what we look for at this level${matched ? ` — in particular ${matched}` : ""}. You can now take your AI interview. Good luck!`;
+    case "level":
+      return `Thanks for applying for ${role}. From your CV, you clearly meet the requirements for ${suggestion?.title}` +
+        `${suggestion?.reason ? `: ${suggestion.reason.replace(/\.$/, "")}` : ""}.` +
+        ` For ${role} we'd expect to see more evidence of ${missing || "the scope and ownership expected at that level"}.` +
+        ` We suggest starting at ${suggestion?.title}. If you accept, your CV is approved at that level and you can take your AI interview straight away. If you'd rather keep ${role}, choose "Keep my level" and our team will review your CV again.`;
+    case "changes":
+      return `Thanks for your CV. Before we can approve it for ${role}, please update it to show clear evidence of ${missing || "the key skills for this role"}. For each, add the project or job where you used it, the tools involved and the result. Then upload the updated CV and we'll review it again.`;
+    case "reject":
+      return `Thank you for applying for ${role}. We're unable to approve your CV at this time — the role needs ${missing || "skills and experience"} that your CV doesn't currently show. You're welcome to choose a level or role that better matches your background, or build these skills with our training, then submit again.`;
+    default:
+      return "";
+  }
+}
+const DECISIONS = [
+  { key: "approve", label: "Approve", status: "Approved" },
+  { key: "level", label: "Suggest lower level", status: "Level suggested" },
+  { key: "changes", label: "Request changes", status: "Changes requested" },
+  { key: "reject", label: "Reject", status: "Rejected" },
+];
 
 export default function CvReviews() {
   const { supabaseEnabled } = useAuth();
@@ -65,7 +93,11 @@ export default function CvReviews() {
                   </td>
                   <td>{s.targetRole}</td>
                   <td><span className="cvr-file"><IconFileText width={15} height={15} /> {s.fileName}</span></td>
-                  <td><span className={`pill-status ${STATUS_CLASS[s.status] || "pending"}`}>{s.status}</span></td>
+                  <td>
+                    <span className={`pill-status ${STATUS_CLASS[s.status] || "pending"}`}>{s.status}</span>
+                    {s.status === "Pending review" && s.levelResponse === "declined" && <div className="cvr-tag">Kept their level — decide</div>}
+                    {s.status === "Approved" && s.levelResponse === "accepted" && <div className="cvr-tag ok">Accepted suggested level</div>}
+                  </td>
                   <td><button className="mini-btn" onClick={() => setActive(s)}>Review</button></td>
                 </tr>
               ))}
@@ -116,8 +148,26 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
     }
   };
 
-  // Pre-fill the note: an existing review note if any, else the suggestion.
-  const [note, setNote] = useState(sub.reviewNote || suggestedNote(baseMatch, sub.targetRole));
+  // The decision drives the note: picking a decision rewrites the note from
+  // its template (using the AI read when available). Edits are kept until the
+  // decision changes.
+  const suggestion = ai?.levelSuggestion || null;
+  const initialDecision = (baseMatch.score ?? 0) >= 70 ? "approve" : "changes";
+  const [decision, setDecision] = useState(initialDecision);
+  const [note, setNote] = useState(sub.reviewNote || decisionNote(initialDecision, { match: baseMatch, role: sub.targetRole }));
+  const [edited, setEdited] = useState(!!sub.reviewNote);
+  const pickDecision = (d) => {
+    setDecision(d); setEdited(false);
+    setNote(decisionNote(d, { match, role: sub.targetRole, suggestion }));
+  };
+  // When the AI read arrives, re-draft the note (unless the reviewer edited it)
+  // and pre-select the level suggestion if the CV fits a lower level.
+  useEffect(() => {
+    if (!ai) return;
+    const d = ai.levelSuggestion ? "level" : (ai.score ?? 0) >= 70 ? "approve" : decision === "level" ? "changes" : decision;
+    if (!edited) { setDecision(d); setNote(decisionNote(d, { match: ai, role: sub.targetRole, suggestion: ai.levelSuggestion })); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
@@ -135,7 +185,7 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
   const submit = async (status, overrideNote) => {
     setErr(""); setMsg("");
     const finalNote = (overrideNote ?? note).trim();
-    if ((status === "Rejected" || status === "Changes requested") && !finalNote) {
+    if ((status === "Rejected" || status === "Changes requested" || status === "Level suggested") && !finalNote) {
       setErr("Please add a note explaining what the candidate should fix.");
       return;
     }
@@ -148,7 +198,7 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
       const res = await fetch("/api/admin/cv-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cvId: sub.id, candidateId: sub.candidateId, status, note: finalNote }),
+        body: JSON.stringify({ cvId: sub.id, candidateId: sub.candidateId, status, note: finalNote, suggestedRole: status === "Level suggested" ? suggestion?.roleKey : undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -200,6 +250,24 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
             </>
           )}
           <p>{match.comment}</p>
+          {ai?.levelFit && (
+            <div className="cvr-levels">
+              <div className="cvr-skill-label">Level fit (AI read)</div>
+              <div className="cvr-skills">
+                {["junior", "mid", "senior"].filter((l) => ai.levelFit[l]).map((l) => (
+                  <span key={l} className={`cvr-skill ${ai.levelFit[l] === "meets" ? "have" : ai.levelFit[l] === "partial" ? "part" : "miss"}`}>
+                    {l === "mid" ? "Mid-level" : l[0].toUpperCase() + l.slice(1)}: {ai.levelFit[l]}{sub.roleKey?.endsWith("-" + l) ? " · applied" : ""}
+                  </span>
+                ))}
+              </div>
+              {ai.levelReason && <p className="cvr-level-why">{ai.levelReason}</p>}
+              {suggestion && (
+                <div className="cvr-level-sug">
+                  <b>Suggest {suggestion.title}?</b> The CV meets this level but not the one applied for. The candidate can accept (level changes, CV approved) or keep their level.
+                </div>
+              )}
+            </div>
+          )}
           {roleReq?.description && (
             <details className="cvr-brief">
               <summary>Role brief</summary>
@@ -257,14 +325,27 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
           </div>
 
           <div className="cvr-note">
-            <label className="cv-step-label">Note to candidate</label>
+            <label className="cv-step-label">Decision</label>
+            <div className="cvr-decisions" role="radiogroup" aria-label="Decision">
+              {DECISIONS.map((d) => {
+                const disabled = d.key === "level" && !suggestion;
+                return (
+                  <button key={d.key} type="button" role="radio" aria-checked={decision === d.key} disabled={disabled}
+                    className={`cvr-dec ${decision === d.key ? "on" : ""} ${d.key}`} onClick={() => pickDecision(d.key)}
+                    title={disabled ? "Available when the AI read shows the CV meets a lower level of this role" : ""}>
+                    {d.key === "level" && suggestion ? `Suggest ${suggestion.title.replace(/^.*\((.*)\)$/, "$1")}` : d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="cv-step-label" style={{ marginTop: 10 }}>Note to candidate</label>
             <textarea
               className="cvr-textarea"
-              rows={6}
+              rows={7}
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => { setNote(e.target.value); setEdited(true); }}
             />
-            <p className="cvr-hint">Pre-filled from the analysis — edit as needed. The candidate receives this as a notification, and by email when an email provider is configured.</p>
+            <p className="cvr-hint">Written for the decision you pick{ai ? " using the AI read" : ""} — edit as needed. The candidate receives it as a notification and by email.{!suggestion && supabaseEnabled ? " Run “Read the CV with AI” to check whether a lower level fits better." : ""}</p>
           </div>
         </div>
 
@@ -272,14 +353,11 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
         {msg && <div className="role-note ok" style={{ marginTop: 4 }}>{msg}</div>}
 
         <div className="cvr-actions">
-          <button className="btn-decline" disabled={busy} onClick={() => submit("Rejected")}>
-            <IconX width={14} height={14} /> Reject
-          </button>
-          <button className="btn-outline" disabled={busy} onClick={() => submit("Changes requested")}>
-            <IconRefresh width={14} height={14} /> Request changes
-          </button>
-          <button className="btn-solid" disabled={busy} onClick={() => submit("Approved")}>
-            <IconCheck width={14} height={14} /> {busy ? "Saving…" : "Approve & notify"}
+          <button className="btn-outline" disabled={busy} onClick={onClose}>Cancel</button>
+          <button className={decision === "reject" ? "btn-decline" : "btn-solid"} disabled={busy || (decision === "level" && !suggestion)}
+            onClick={() => submit(DECISIONS.find((d) => d.key === decision).status)}>
+            {decision === "approve" ? <IconCheck width={14} height={14} /> : decision === "reject" ? <IconX width={14} height={14} /> : <IconRefresh width={14} height={14} />}
+            {busy ? " Saving…" : decision === "approve" ? " Approve & notify" : decision === "reject" ? " Reject & notify" : decision === "level" ? ` Send ${suggestion?.title || "level"} suggestion` : " Request changes"}
           </button>
         </div>
       </div>
