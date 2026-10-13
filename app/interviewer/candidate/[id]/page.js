@@ -7,6 +7,7 @@ import { useAuth } from "@/components/context/AuthContext";
 import { CANDIDATES, synthesizeNotes } from "@/components/interviewer/data";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadInterviewerCandidate } from "@/lib/db";
+import InterviewGuide from "@/components/interviewer/InterviewGuide";
 import { IconStar, IconArrowLeft, IconBolt, IconCheck, IconEnvelope } from "@/components/Icons";
 
 export default function CandidateDetail() {
@@ -132,6 +133,8 @@ export default function CandidateDetail() {
           <p>{info.role} · {interviewerKind} stage</p>
         </div>
       </div>
+
+      <InterviewGuide candidateId={id} stage={interviewerKind === "HR" ? "HR" : "Professional"} />
 
       {/* Decision & verdict — the authoritative stage result */}
       <div className="card pad" style={{ marginTop: 18, borderColor: outcome ? (outcome.passed ? "rgba(46,204,113,.4)" : "rgba(255,59,48,.3)") : undefined }}>

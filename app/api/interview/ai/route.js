@@ -77,6 +77,14 @@ async function buildFromSession(profile) {
 
   const { byKey } = await loadRoleRequirements(admin);
   const roleReq = byKey[cand?.target_role] || null;
+  // Staff-only interview blueprint for this role-level (read with the service role).
+  let playbook = null;
+  if (cand?.target_role) {
+    try {
+      const { data } = await admin.from("role_playbooks").select("competencies, ai_blueprint").eq("role_key", cand.target_role).maybeSingle();
+      playbook = data || null;
+    } catch { /* pre-0029 */ }
+  }
 
   let cvText = "";
   if (cvRow?.file_path) {
@@ -95,7 +103,7 @@ async function buildFromSession(profile) {
     skills: cand?.skills || [],
   };
 
-  return buildInterviewSystem({ roleReq, cvText, candidate });
+  return buildInterviewSystem({ roleReq, playbook, cvText, candidate });
 }
 
 // Build a degraded system prompt from client-provided profile (demo mode, no

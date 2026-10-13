@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AuthLayout from "@/components/auth/AuthLayout";
 import { TextField, SelectField } from "@/components/auth/Field";
 import OAuthButtons from "@/components/auth/OAuthButtons";
+import RolePicker from "@/components/RolePicker";
 import { useAuth } from "@/components/context/AuthContext";
 import {
   IconUploadCloud,
@@ -318,30 +319,8 @@ function StepProfessional({ data, update, onNext, onBack }) {
 }
 
 /* ---------- Step 3 — Target job (interpretation) ---------- */
-const ROLE_ICONS = { software: IconCode, data: IconChart, product: IconUser, cloud: IconBriefcase, security: IconLock, support: IconBriefcase };
-const OTHER = "__other__";
 
 function StepTargetJob({ data, update, onNext, onBack }) {
-  const { supabaseEnabled } = useAuth();
-  // Only roles an admin has opened for applications are offered. Demo mode
-  // (no backend) falls back to the built-in list.
-  const [roles, setRoles] = useState(supabaseEnabled ? null : JOB_FIELDS);
-  useEffect(() => {
-    if (!supabaseEnabled) return;
-    let live = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/roles", { cache: "no-store" });
-        const json = await res.json();
-        if (!live) return;
-        if (Array.isArray(json.roles)) {
-          setRoles(json.roles.map((r) => ({ id: r.key, label: r.title, desc: r.description || "Open for applications", Icon: ROLE_ICONS[r.key] || IconBriefcase })));
-        } else setRoles(JOB_FIELDS);
-      } catch { if (live) setRoles(JOB_FIELDS); }
-    })();
-    return () => { live = false; };
-  }, [supabaseEnabled]);
-
   const other = data.roleNotListed === true;
   const canNext = other ? !!(data.interestedRole || "").trim() : !!data.targetRole;
   const submit = (e) => {
@@ -351,53 +330,31 @@ function StepTargetJob({ data, update, onNext, onBack }) {
   };
   return (
     <>
-      <h1 className="auth-title">Choose a target</h1>
+      <h1 className="auth-title">Choose your target role</h1>
       <p className="auth-subtitle">
-        Pick the field you want to be assessed and matched for. These are the
-        positions currently open on NexIT-Africa.
+        Pick an area, the role you want and your level. Your AI interview, human
+        interviews and training are built around this choice.
       </p>
       <form onSubmit={submit}>
-        {roles === null ? (
-          <p style={{ color: "var(--gray-500)", fontSize: 14, marginBottom: 24 }}>Loading open positions…</p>
-        ) : (
-          <div className="job-grid" style={{ marginBottom: 16 }}>
-            {roles.map(({ id, label, desc, Icon }) => (
-              <button
-                type="button"
-                key={id}
-                className={`job-card ${!other && data.targetRole === id ? "selected" : ""}`}
-                onClick={() => update({ targetRole: id, targetRoleLabel: label, roleNotListed: false })}
-              >
-                <span className="jc-icon">
-                  <Icon width={20} height={20} />
-                </span>
-                <span>
-                  <h4>{label}</h4>
-                  <p>{desc}</p>
-                </span>
-              </button>
-            ))}
-            <button
-              type="button"
-              key={OTHER}
-              className={`job-card ${other ? "selected" : ""}`}
-              onClick={() => update({ targetRole: "", roleNotListed: true })}
-            >
-              <span className="jc-icon">
-                <IconUser width={20} height={20} />
-              </span>
-              <span>
-                <h4>My field isn&apos;t listed</h4>
-                <p>Register now — we&apos;ll notify you when it opens</p>
-              </span>
-            </button>
-          </div>
+        {!other && (
+          <RolePicker value={data.targetRole} onChange={(key, r) => update({ targetRole: key, targetRoleLabel: r?.title || "", roleNotListed: false })} />
         )}
+        <button
+          type="button"
+          className={`job-card rp-other ${other ? "selected" : ""}`}
+          onClick={() => update(other ? { roleNotListed: false } : { targetRole: "", roleNotListed: true })}
+        >
+          <span className="jc-icon"><IconUser width={20} height={20} /></span>
+          <span>
+            <h4>{other ? "Back to the list of roles" : "My role isn’t listed"}</h4>
+            <p>{other ? "Choose from the open positions instead" : "Register now — we’ll notify you when it opens"}</p>
+          </span>
+        </button>
 
         {other && (
           <TextField
             label="Which position are you interested in?"
-            placeholder="e.g. Mobile Development, QA Engineering"
+            placeholder="e.g. QA Engineer, Data Protection Officer"
             value={data.interestedRole || ""}
             onChange={(e) => update({ interestedRole: e.target.value })}
           />
@@ -492,7 +449,7 @@ function StepReview({ data, role, onBack, onFinish, error, busy }) {
   const extra = role === "recruiter"
     ? [["Organisation", data.orgName || "—"], ["Your role", data.jobTitle || "—"]]
     : role === "candidate"
-    ? [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"], ["Target field", data.roleNotListed ? `${data.interestedRole || "Not listed"} — we'll notify you when it opens` : JOB_FIELDS.find((j) => j.id === data.targetRole)?.label || data.targetRoleLabel || data.targetRole || "—"], ["Job type", data.jobType], ["CV", data.cvName || "—"]]
+    ? [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"], ["Target role", data.roleNotListed ? `${data.interestedRole || "Not listed"} — we'll notify you when it opens` : JOB_FIELDS.find((j) => j.id === data.targetRole)?.label || data.targetRoleLabel || data.targetRole || "—"], ["Job type", data.jobType], ["CV", data.cvName || "—"]]
     : [["Job title", data.jobTitle || "—"], ["Experience", data.experience || "—"]];
   const rows = [...base, ...extra];
   return (

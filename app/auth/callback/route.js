@@ -6,7 +6,9 @@ import { getServerSupabase } from "@/lib/supabase/server";
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") || "/dashboard";
+  // Only same-site paths (blocks "//evil.com" style open redirects).
+  const rawNext = searchParams.get("next") || "/dashboard";
+  const next = /^\/(?!\/)[\w\-/?=&.%]*$/.test(rawNext) ? rawNext : "/dashboard";
 
   if (code) {
     const supabase = await getServerSupabase();
@@ -15,6 +17,8 @@ export async function GET(request) {
       if (!error) return NextResponse.redirect(`${origin}${next}`);
     }
   }
-  // Something went wrong — send them to login with a flag.
+  // Something went wrong. A password-reset link that failed goes back to the
+  // reset page (it explains and offers a new code); anything else → login.
+  if (next.startsWith("/reset-password")) return NextResponse.redirect(`${origin}/reset-password`);
   return NextResponse.redirect(`${origin}/login?confirmed=0`);
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
+import { ROLES as CAT_ROLES, areaTitle } from "@/lib/roleCatalog";
 import { loadRoleRequirements, loadSpecificCourses, createSpecificCourse, updateSpecificCourse, deleteSpecificCourse, ROLE_LABELS } from "@/lib/db";
 import { IconPlus, IconX, IconCheck } from "@/components/Icons";
 import { ApprovalBar, useCanApprove } from "@/components/admin/Approval";
@@ -24,11 +25,25 @@ export default function AdminSpecificTraining() {
   const canApprove = useCanApprove();
 
   useEffect(() => {
-    if (!supabaseEnabled) { setRoles(Object.entries(ROLE_LABELS).map(([k, v]) => ({ role_key: k, title: v }))); setRoleKey("software"); return; }
+    // Courses belong to a ROLE (shared by its Junior / Mid / Senior levels).
+    const toOptions = (list) => {
+      const seen = new Map();
+      for (const r of list) {
+        const key = r.base_role || r.role_key;
+        if (seen.has(key)) continue;
+        seen.set(key, { role_key: key, title: r.base_title || r.title, area: r.area_key && r.level ? areaTitle(r.area_key) : "Other" });
+      }
+      return [...seen.values()];
+    };
+    if (!supabaseEnabled) {
+      const opts = toOptions(CAT_ROLES.map((r) => ({ role_key: r.key, base_role: r.base, base_title: r.baseTitle, area_key: r.area, level: r.level })));
+      setRoles(opts); setRoleKey(opts[0]?.role_key || ""); return;
+    }
     (async () => {
       const { list } = await loadRoleRequirements(sb());
-      setRoles(list);
-      setRoleKey(list[0]?.role_key || "");
+      const opts = toOptions([...list].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)));
+      setRoles(opts);
+      setRoleKey(opts[0]?.role_key || "");
     })();
   }, [supabaseEnabled]);
 
@@ -76,7 +91,11 @@ export default function AdminSpecificTraining() {
 
       <div className="rr-top">
         <select className="rr-exp-input" style={{ minWidth: "min(220px, 100%)" }} value={roleKey} onChange={(e) => setRoleKey(e.target.value)}>
-          {roles.map((r) => <option key={r.role_key} value={r.role_key}>{r.title}</option>)}
+          {[...new Set(roles.map((r) => r.area))].map((a) => (
+            <optgroup key={a} label={a}>
+              {roles.filter((r) => r.area === a).map((r) => <option key={r.role_key} value={r.role_key}>{r.title}</option>)}
+            </optgroup>
+          ))}
         </select>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn-outline" onClick={() => addCourse("foundational")}><IconPlus width={14} height={14} /> Foundational course</button>

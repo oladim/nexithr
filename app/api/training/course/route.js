@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
+import { hasCourseAccess } from "@/lib/roleAccess";
 
 export const runtime = "nodejs";
 
@@ -22,8 +23,7 @@ export async function GET(request) {
   if (!course || !course.approved) return NextResponse.json({ error: "This course isn't available yet." }, { status: 404 });
 
   // Access: candidate must have purchased specific training for this role.
-  const { data: access } = await admin.from("training_access").select("role_key").eq("candidate_id", me.id).eq("role_key", course.role_key).maybeSingle();
-  if (!access) return NextResponse.json({ error: "You don't have access to this course." }, { status: 403 });
+  if (!(await hasCourseAccess(admin, me.id, course.role_key))) return NextResponse.json({ error: "You don't have access to this course." }, { status: 403 });
 
   // Ensure an enrollment exists.
   await admin.from("enrollments").upsert({ candidate_id: me.id, course_id: courseId }, { onConflict: "candidate_id,course_id" });

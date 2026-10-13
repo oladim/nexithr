@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
+import { courseKeysFor } from "@/lib/roleCatalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,8 +40,9 @@ export async function GET() {
     return NextResponse.json({ courses: [], stats: emptyStats(), todo: [], recent: [], next: null, access });
   }
 
+  const courseKeys = [...new Set(roleKeys.flatMap(courseKeysFor))];
   const { data: courses } = await admin.from("specific_courses")
-    .select("id, title, level, role_key, duration, sort").in("role_key", roleKeys).eq("approved", true).order("sort", { ascending: true });
+    .select("id, title, level, role_key, duration, sort").in("role_key", courseKeys).eq("approved", true).order("sort", { ascending: true });
   const courseIds = (courses || []).map((c) => c.id);
   if (courseIds.length === 0) {
     return NextResponse.json({ courses: [], stats: emptyStats(), todo: [], recent: [], next: null, access });

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "fetch-assets": "node scripts/fetch-assets.mjs"
+    "fetch-assets": "node scripts/fetch-assets.mjs",
+    "build:roles": "node scripts/build-roles.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

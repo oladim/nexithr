@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
+import { AREAS as CAT_AREAS, ROLES as CAT_ROLES } from "@/lib/roleCatalog";
 import { loadRoleRequirements, loadSuggestedResources, createSuggestedResource, updateSuggestedResource, deleteSuggestedResource, ROLE_LABELS } from "@/lib/db";
 import { IconPlus, IconCheck, IconX } from "@/components/Icons";
 
@@ -22,10 +23,22 @@ export default function AdminSuggestedResources() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!supabaseEnabled) { setRoles(Object.entries(ROLE_LABELS).map(([k, v]) => ({ role_key: k, title: v }))); return; }
+    // Targets: a whole area, a role (all levels) or one role-level.
+    const build = () => {
+      const out = [];
+      for (const a of CAT_AREAS) {
+        out.push({ role_key: a.key, title: `${a.title} — whole area`, group: a.title });
+        const bases = [...new Map(CAT_ROLES.filter((r) => r.area === a.key).map((r) => [r.base, r])).values()];
+        for (const b of bases) {
+          out.push({ role_key: b.base, title: `${b.baseTitle} — all levels`, group: a.title });
+          CAT_ROLES.filter((r) => r.base === b.base).forEach((r) => out.push({ role_key: r.key, title: r.title, group: a.title }));
+        }
+      }
+      return out;
+    };
+    setRoles(build());
+    if (!supabaseEnabled) return;
     (async () => {
-      const { list } = await loadRoleRequirements(sb());
-      setRoles(list);
       setRows(await loadSuggestedResources(sb(), null));
     })();
   }, [supabaseEnabled]);
@@ -85,7 +98,7 @@ export default function AdminSuggestedResources() {
                 <div className="field field-simple"><label>Audience</label>
                   <select value={r.role_key || ""} onChange={(e) => change(r.id, "role_key", e.target.value || null)}>
                     <option value="">All roles</option>
-                    {roles.map((x) => <option key={x.role_key} value={x.role_key}>{x.title}</option>)}
+                    <RoleOptions roles={roles} current={r.role_key} />
                   </select>
                 </div>
                 <div className="field field-simple"><label>Category</label>
@@ -120,7 +133,7 @@ function ResourceForm({ roles, onCancel, onSave }) {
         <div className="field field-simple"><label>Audience</label>
           <select value={f.role_key} onChange={set("role_key")}>
             <option value="">All roles</option>
-            {roles.map((x) => <option key={x.role_key} value={x.role_key}>{x.title}</option>)}
+            <RoleOptions roles={roles} current={f.role_key} />
           </select>
         </div>
         <div className="field field-simple"><label>Category</label>
@@ -132,5 +145,21 @@ function ResourceForm({ roles, onCancel, onSave }) {
         <button className="btn-solid" onClick={() => onSave(f)}><IconPlus width={14} height={14} /> Add</button>
       </div>
     </div>
+  );
+}
+
+// Grouped <option>s; keeps an unknown (legacy / custom) value selectable.
+function RoleOptions({ roles, current }) {
+  const groups = [...new Set(roles.map((r) => r.group))];
+  const known = roles.some((r) => r.role_key === current);
+  return (
+    <>
+      {current && !known && <option value={current}>{current}</option>}
+      {groups.map((g) => (
+        <optgroup key={g} label={g}>
+          {roles.filter((r) => r.group === g).map((x) => <option key={x.role_key} value={x.role_key}>{x.title}</option>)}
+        </optgroup>
+      ))}
+    </>
   );
 }

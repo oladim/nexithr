@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { IconStar } from "@/components/Icons";
+import { IconCheck } from "@/components/Icons";
 import BrandLogo from "@/components/BrandLogo";
 
-// The dark left panel shared by Login / Sign Up / password-recovery screens.
-// Recreates the Figma aside: NexIT-Africa wordmark, 5 stars, testimonial,
-// and reviewer. The "N" mark and diagonal pattern are drawn inline (the
-// original Figma vector assets were behind rate-limited/expiring URLs).
+// The dark left panel shared by Login / Sign Up / password-recovery screens:
+// wordmark plus a short, factual summary of what NexIT-Africa does.
+const POINTS = [
+  { t: "AI interview", d: "A voice interview that shows exactly where you stand for your target role." },
+  { t: "Role-specific training", d: "Courses, assignments and live practicals that close your gaps." },
+  { t: "Professional & HR interviews", d: "Pass both and you're on the verified candidate board." },
+];
+
 export default function AuthAside() {
   return (
     <aside className="auth-aside">
@@ -13,23 +17,17 @@ export default function AuthAside() {
         <BrandLogo tone="dark" height={40} priority />
       </Link>
 
-      <div className="auth-testimonial">
-        <div className="stars">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <IconStar key={i} />
+      <div className="auth-testimonial auth-points">
+        <p className="ap-kicker">From CV to job offer — in one place</p>
+        <ul>
+          {POINTS.map((p) => (
+            <li key={p.t}>
+              <span className="ap-ic" aria-hidden="true"><IconCheck width={16} height={16} /></span>
+              <div><strong>{p.t}</strong><span>{p.d}</span></div>
+            </li>
           ))}
-        </div>
-        <p className="quote">
-          “I am incredibly impressed with the outstanding service and
-          user-friendly customer support provided by NexIT-Africa”
-        </p>
-        <div className="person">
-          <span className="pic">DL</span>
-          <div>
-            <strong>Devon Lane</strong>
-            <span>Co-Founder, Design.co</span>
-          </div>
-        </div>
+        </ul>
+        <p className="ap-nvp">Pass every stage to earn <b>N|VP</b> — NexIT Verified Professional.</p>
       </div>
     </aside>
   );

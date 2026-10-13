@@ -58,8 +58,11 @@ export default function DashboardHome() {
   const ai = app.aiInterview || {};
   const aiReleased = ai.status ? ai.status === "released" : true;
   const aiScore = aiReleased && typeof ai.lastScore === "number" ? ai.lastScore : null;
-  const profAvg = app.stages?.Professional?.result?.avg;
-  const hrAvg = app.stages?.HR?.result?.avg;
+  // Professional/HR panels rate out of 5 — convert to % so they sit
+  // alongside the AI score (which is already a percentage).
+  const fiveToPct = (v) => (typeof v === "number" ? Math.round((v / 5) * 100) : v);
+  const profAvg = fiveToPct(app.stages?.Professional?.result?.avg);
+  const hrAvg = fiveToPct(app.stages?.HR?.result?.avg);
 
   const segments = aiReleased ? skillSegments(ai.breakdown) : [];
   const topSkill = segments.length
@@ -150,9 +153,13 @@ export default function DashboardHome() {
             <span className="chip ok">
               <IconCheck /> Registration completed &amp; CV uploaded
             </span>
-            <span className="chip wait">
-              <IconClock /> {app.cv.status || "Waiting for approval"}
-            </span>
+            {app.cv.status === "Approved" ? (
+              <span className="chip ok"><IconCheck /> CV approved</span>
+            ) : (
+              <span className={`chip ${/reject|change/i.test(app.cv.status || "") ? "bad" : "wait"}`}>
+                <IconClock /> {app.cv.status || "Waiting for approval"}
+              </span>
+            )}
           </>
         ) : (
           <span className="chip wait">

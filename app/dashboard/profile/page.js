@@ -7,6 +7,7 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadProfileDetails, updateProfile, updateCandidate, uploadAvatar, ROLE_LABELS } from "@/lib/db";
 import { IconUpload, IconCheck, IconBriefcase, IconChart, IconUser } from "@/components/Icons";
 import SettingsCrumb from "@/components/SettingsCrumb";
+import RolePicker from "@/components/RolePicker";
 
 const COUNTRIES = ["Nigeria", "Ghana", "Kenya", "South Africa", "Egypt"];
 const EXPERIENCE = ["Student / Fresh graduate", "0 – 1 years", "1 – 3 years", "3 – 5 years", "5+ years"];
@@ -201,11 +202,17 @@ export default function ProfilePage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div className="card pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <h3 className="card-title" style={{ margin: 0 }}>Professional details</h3>
-            <SelectField label="Target role" value={form.targetRole} onChange={set("targetRole")} editing={editing && !roleLocked}
-              options={Object.keys(roleLabels)} labels={roleLabels} placeholderOption="Select a role"
-              note={editing && roleLocked ? "Locked — your interviews have started for this role."
-                : !form.targetRole ? "Only positions currently open are listed. We'll notify you when more become available."
-                : undefined} />
+            {editing && !roleLocked ? (
+              <div>
+                <label className="cv-step-label" style={{ marginBottom: 6 }}>Target role</label>
+                <RolePicker variant="compact" value={form.targetRole} onChange={(key) => setForm((f) => ({ ...f, targetRole: key }))} />
+                <small className="rp-note">Only positions currently open are listed. We&apos;ll notify you when more become available.</small>
+              </div>
+            ) : (
+              <SelectField label="Target role" value={form.targetRole} editing={false}
+                options={Object.keys(roleLabels)} labels={roleLabels} placeholderOption="Select a role"
+                note={editing && roleLocked ? "Locked — your interviews have started for this role." : undefined} />
+            )}
             <SelectField label="Experience" value={form.experience} onChange={set("experience")} editing={editing} options={EXPERIENCE} placeholderOption="Select experience" />
             <div>
               <label className="cv-step-label" style={{ marginBottom: 6 }}>Skills</label>

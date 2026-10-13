@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
+import CodeInput, { useResendTimer, fmtSecs, retryAfterSeconds } from "@/components/auth/CodeInput";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/context/AuthContext";
 import { IconEnvelope } from "@/components/Icons";
@@ -9,20 +10,12 @@ import { IconEnvelope } from "@/components/Icons";
 export default function VerifyEmailPage() {
   const router = useRouter();
   const { signup, verifyEmailOtp, resendConfirmation, supabaseEnabled } = useAuth();
-  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [code, setCode] = useState("");
+  const timer = useResendTimer(60); // a code was just sent at sign-up
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const inputs = useRef([]);
-
-  const setDigit = (i, v) => {
-    if (!/^\d?$/.test(v)) return;
-    const next = [...code];
-    next[i] = v;
-    setCode(next);
-    if (v && i < 5) inputs.current[i + 1]?.focus();
-  };
-  const complete = code.every((d) => d !== "");
+  const complete = code.length === 6;
 
   const onVerify = async () => {
     setError("");
@@ -31,7 +24,7 @@ export default function VerifyEmailPage() {
       return;
     }
     setBusy(true);
-    const res = await verifyEmailOtp(signup.email, code.join(""));
+    const res = await verifyEmailOtp(signup.email, code);
     setBusy(false);
     if (res?.error) {
       setError(res.error);
@@ -43,11 +36,14 @@ export default function VerifyEmailPage() {
   const onResend = async () => {
     setError("");
     setNote("");
-    setCode(["", "", "", "", "", ""]);
-    if (!supabaseEnabled) return;
+    if (!timer.ready) return;
+    setCode("");
+    if (!supabaseEnabled) { timer.start(60); return; }
     const res = await resendConfirmation(signup.email);
-    if (res?.error) setError(res.error);
-    else setNote("A new code is on its way — check your inbox.");
+    const wait = retryAfterSeconds(res?.error);
+    if (res?.error && !wait) { setError(res.error); timer.start(60); return; }
+    timer.start(wait || 60);
+    setNote(wait ? "We sent a code a moment ago — check your inbox (and spam)." : "A new code is on its way. Only the newest code works.");
   };
 
   return (
@@ -62,22 +58,7 @@ export default function VerifyEmailPage() {
           <b>{signup.email || "your email address"}</b>. Enter it below to
           confirm your account.
         </p>
-        <div className="code-row">
-          {code.map((d, i) => (
-            <input
-              key={i}
-              ref={(el) => (inputs.current[i] = el)}
-              inputMode="numeric"
-              maxLength={1}
-              value={d}
-              onChange={(e) => setDigit(i, e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Backspace" && !d && i > 0)
-                  inputs.current[i - 1]?.focus();
-              }}
-            />
-          ))}
-        </div>
+        <CodeInput value={code} onChange={(v) => { setCode(v); setError(""); }} disabled={busy} invalid={!!error} />
         {error && <p className="auth-error" style={{ textAlign: "left" }}>{error}</p>}
         {note && <p className="resend" style={{ color: "var(--green)" }}>{note}</p>}
         <button
@@ -89,9 +70,9 @@ export default function VerifyEmailPage() {
         </button>
         <p className="resend">
           Didn&apos;t receive the code?{" "}
-          <span className="link" onClick={onResend}>
-            Resend
-          </span>
+          {timer.ready
+            ? <button type="button" className="link-btn" onClick={onResend}>Resend</button>
+            : <span className="fp-wait">Resend in <b>{fmtSecs(timer.left)}</b></span>}
         </p>
       </div>
     </div>
