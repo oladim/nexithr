@@ -150,11 +150,13 @@ async function persistAiResult(me, assessment) {
     const now = new Date().toISOString();
     const { data: cur } = await admin.from("ai_interviews").select("attempts").eq("candidate_id", me.id).maybeSingle();
     const attempts = (cur?.attempts ?? 0) + 1;
-    await admin.from("ai_interviews").upsert({
+    const { error: saveErr } = await admin.from("ai_interviews").upsert({
       candidate_id: me.id, attempts, last_score: overall, passed,
       breakdown: assessment.breakdown, feedback: assessment.summary,
       band, suggested_training: assessment.suggestedTraining || null, status, updated_at: now,
+      confirmed_by: null, confirmed_at: null,
     }, { onConflict: "candidate_id" });
+    if (saveErr) { console.error("[ai-interview] couldn't save result:", saveErr.message); return null; }
     await admin.from("candidates").update({ last_ai_attempt_at: now }).eq("id", me.id);
     const bandLabel = { ready: "Ready", close: "Almost there", foundational: "Foundational" }[band] || band;
     await alertAdmins(admin, {
@@ -168,7 +170,7 @@ async function persistAiResult(me, assessment) {
       cta: { label: status === "pending_review" ? "Review AI results" : "Open interview manager", path: status === "pending_review" ? "/admin/ai-results" : "/admin/interviews" },
     });
     return { attempts, score: overall, passed, band, status };
-  } catch { return null; }
+  } catch (e) { console.error("[ai-interview] persist failed:", e?.message || e); return null; }
 }
 
 // Enforce the retake cooldown server-side (defense-in-depth; the client also

@@ -34,8 +34,14 @@ export async function GET(request) {
 
   const { data: enrolls } = await admin
     .from("enrollments")
-    .select("candidate_id, overall_score, result_released, profiles:candidate_id(full_name, email)")
+    .select("candidate_id, overall_score, result_released")
     .eq("course_id", courseId);
+  // enrollments.candidate_id references candidates (not profiles), so PostgREST
+  // can't embed profiles directly — look the names up separately.
+  const enrollIds = (enrolls || []).map((e) => e.candidate_id);
+  const { data: enrollProfs } = enrollIds.length ? await admin.from("profiles").select("id, full_name, email").in("id", enrollIds) : { data: [] };
+  const profOf = Object.fromEntries((enrollProfs || []).map((p) => [p.id, p]));
+  (enrolls || []).forEach((e) => { e.profiles = profOf[e.candidate_id] || null; });
 
   const { data: subs } = await admin
     .from("submissions")
