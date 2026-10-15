@@ -173,7 +173,7 @@ export default function TrainingOverview() {
                 <div>
                   <b>Annual subscription</b>
                   <span className="td-muted">{subscribed
-                    ? `Active${access.subscriptionUntil ? ` until ${new Date(access.subscriptionUntil).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""} · unlimited AI retakes & suggested training`
+                    ? `Active${access.subscriptionUntil ? ` until ${new Date(access.subscriptionUntil).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}${access.subscriptionUntil && new Date(access.subscriptionUntil) - Date.now() < 30 * 864e5 ? ` · expires in ${Math.max(1, Math.ceil((new Date(access.subscriptionUntil) - Date.now()) / 864e5))} day(s), renew to keep access` : " · unlimited AI retakes & suggested training"}`
                     : "Not active — unlocks suggested training and unlimited AI retakes"}</span>
                 </div>
               </div>

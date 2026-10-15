@@ -20,6 +20,7 @@ const NAV = [
   { href: "/admin/suggested-resources", label: "Suggested Resources", Icon: IconCap, perm: "suggested_resources", group: "Training" },
   { href: "/admin/jobs", label: "Job Board", Icon: IconBriefcase, perm: "jobs", group: "Jobs & payments" },
   { href: "/admin/hire-requests", label: "Hire Requests", Icon: IconBriefcase, perm: "hire_requests", group: "Jobs & payments" },
+  { href: "/admin/revenue", label: "Revenue & Subscriptions", Icon: IconCard, perm: "revenue", group: "Jobs & payments" },
   { href: "/admin/payouts", label: "Payouts", Icon: IconCard, perm: "payouts", group: "Jobs & payments" },
   { href: "/admin/testimonials", label: "Testimonials", Icon: IconStar, perm: "testimonials", group: "Website" },
   { href: "/admin/landing", label: "Landing Page", Icon: IconGrid, perm: "landing", group: "Website" },

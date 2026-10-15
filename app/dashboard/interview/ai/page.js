@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuth, AI_PASS_MARK } from "@/components/context/AuthContext";
 import { startPayment, formatMoney } from "@/lib/billing";
 import AiSuggestions from "@/components/training/AiSuggestions";
+import { primeAudio, fetchVoiceCaps, chooseSttEngine, createSpeaker, createAnswerRecorder, transcribeBlob, canRecord } from "@/lib/voiceClient";
 import {
   IconVideo,
   IconMic,
@@ -179,7 +180,12 @@ export default function AiInterviewPage() {
   const [micOn, setMicOn] = useState(false);
 
   // interview engine
-  const [mode, setMode] = useState(null); // "ai" | "demo"
+  const [mode, setModeState] = useState(null); // "ai" | "demo"
+  // Callbacks (timers, speech events) outlive renders, so they read the mode
+  // from a ref — a stale `mode` used to send a live AI interview down the
+  // scripted-practice scoring path when the timer or an error ended it.
+  const modeRef = useRef(null);
+  const setMode = (m) => { modeRef.current = m; setModeState(m); };
   const [blockedStart, setBlockedStart] = useState(false); // server-enforced retake cooldown
   const [preBlock, setPreBlock] = useState(""); // prerequisite reason from the server
   const [preNote, setPreNote] = useState(""); // reviewer's note when the CV was rejected
@@ -193,10 +199,20 @@ export default function AiInterviewPage() {
   const [startError, setStartError] = useState(null); // key set but engine couldn't start
   const [typedMode, setTypedMode] = useState(false); // fallback when STT unavailable
   const [typed, setTyped] = useState("");
+  const [sttEngine, setSttEngine] = useState("browser"); // browser | server | typed
+  const [micLevel, setMicLevel] = useState(0);
+  const [recSecs, setRecSecs] = useState(0);
+  const [spoke, setSpoke] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceNote, setVoiceNote] = useState("");
 
   const convoRef = useRef([]); // [{role:"user"|"assistant", content}]
   const sessionIdRef = useRef(null);
   const recognitionRef = useRef(null);
+  const recorderRef = useRef(null);
+  const speakerRef = useRef(null);
+  const sttEngineRef = useRef("browser");
+  const capsRef = useRef({ stt: false, tts: false });
   const listeningRef = useRef(false);
   const submittingRef = useRef(false);
   const answerRef = useRef(""); // accumulated final transcript for the current answer
@@ -206,8 +222,7 @@ export default function AiInterviewPage() {
 
   const [result, setResult] = useState(null);
 
-  const sttSupported =
-    typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const applyEngine = (e) => { sttEngineRef.current = e; setSttEngine(e); if (e === "typed") setTypedMode(true); };
 
   /* ------------------------------ media ------------------------------ */
   const startMedia = useCallback(async () => {
@@ -260,7 +275,7 @@ export default function AiInterviewPage() {
     return () => {
       teardownVoice();
       stopMedia();
-      try { window.speechSynthesis?.cancel(); } catch {}
+      try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
       if (typeof document !== "undefined" && document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
@@ -286,48 +301,12 @@ export default function AiInterviewPage() {
   }, [step]);
 
   /* ----------------------- text-to-speech (AI) ----------------------- */
-  const pickVoice = () => {
-    try {
-      const voices = window.speechSynthesis?.getVoices?.() || [];
-      return (
-        voices.find((v) => /en[-_]?(US|GB)/i.test(v.lang) && /female|samantha|google|zira|aria/i.test(v.name)) ||
-        voices.find((v) => /^en/i.test(v.lang)) ||
-        voices[0] ||
-        null
-      );
-    } catch {
-      return null;
-    }
-  };
-
   const speak = useCallback((text, onDone) => {
     let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      onDone?.();
-    };
-    try {
-      const synth = window.speechSynthesis;
-      if (synth && text) {
-        synth.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        const v = pickVoice();
-        if (v) u.voice = v;
-        u.rate = 1;
-        u.pitch = 1;
-        u.onend = finish;
-        u.onerror = finish;
-        synth.speak(u);
-        // Safety: if onend never fires, continue after a length-based window.
-        const secs = Math.min(40, Math.max(4, Math.ceil(text.length / 11)));
-        setTimeout(finish, secs * 1000);
-      } else {
-        setTimeout(finish, 1200);
-      }
-    } catch {
-      finish();
-    }
+    const finish = () => { if (!done) { done = true; onDone?.(); } };
+    const sp = speakerRef.current || (speakerRef.current = createSpeaker({ serverTts: capsRef.current.tts }));
+    // Only move on to listening if the speech wasn't cancelled (end/retake).
+    sp.speak(text).then((completed) => { if (completed !== false) finish(); }, finish);
   }, []);
 
   /* ------------------ speech-to-text (candidate voice) --------------- */
@@ -359,17 +338,22 @@ export default function AiInterviewPage() {
       }
     } catch {}
     recognitionRef.current = null;
+    try { recorderRef.current?.cancel(); } catch {}
+    recorderRef.current = null;
+    setMicLevel(0);
   };
 
   // Begin capturing the candidate's spoken answer (hands-free).
   const startListening = () => {
-    if (!sttSupported) {
-      // No browser STT → typed fallback so the interview still works.
+    const engine = sttEngineRef.current;
+    if (engine === "typed") {
       setTypedMode(true);
       setPhase("listening");
       return;
     }
+    if (engine === "server") return startRecording();
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { applyEngine(capsRef.current.stt && canRecord() ? "server" : "typed"); return startListening(); }
     answerRef.current = "";
     setLiveText("");
     submittingRef.current = false;
@@ -394,9 +378,23 @@ export default function AiInterviewPage() {
       };
       rec.onerror = (ev) => {
         // 'no-speech'/'aborted' are normal during pauses — keep the loop alive.
-        if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
+        const err = ev?.error;
+        if (err === "not-allowed") {
+          // Microphone permission denied → typing is the only option.
           listeningRef.current = false;
-          setTypedMode(true);
+          setVoiceNote("Microphone access was blocked, so you can type your answers instead.");
+          applyEngine("typed");
+          setPhase("listening");
+        } else if (["network", "service-not-allowed", "language-not-supported", "audio-capture"].includes(err)) {
+          // The browser exposes speech recognition but its service isn't
+          // available (Brave, Opera, offline, some Safari setups) → record and
+          // transcribe on our server instead, or type.
+          listeningRef.current = false;
+          try { rec.onend = null; } catch {}
+          const next = capsRef.current.stt && canRecord() ? "server" : "typed";
+          if (next === "typed") setVoiceNote("Voice input isn't available in this browser right now — type your answer.");
+          applyEngine(next);
+          setTimeout(() => startListening(), 50);
         }
       };
       rec.onend = () => {
@@ -411,12 +409,64 @@ export default function AiInterviewPage() {
     startOne();
   };
 
+  // Record-and-transcribe listening (Firefox, Safari, mobile, Brave…).
+  const startRecording = () => {
+    answerRef.current = "";
+    setLiveText("");
+    setSpoke(false);
+    setRecSecs(0);
+    setTranscribing(false);
+    submittingRef.current = false;
+    listeningRef.current = true;
+    setPhase("listening");
+    const stream = streamRef.current;
+    let ctl = null;
+    try {
+      ctl = createAnswerRecorder(stream, {
+        silenceMs: SILENCE_MS + 600,
+        onLevel: (l) => setMicLevel(l),
+        onSpeechStart: () => { setSpoke(true); setVoiceNote(""); },
+        onElapsed: (sec) => setRecSecs(sec),
+        onAutoStop: () => finishAnswerAndSubmit(),
+      });
+    } catch {
+      setVoiceNote("We couldn't access your microphone — type your answer instead.");
+      applyEngine("typed");
+      setPhase("listening");
+      return;
+    }
+    recorderRef.current = ctl;
+  };
+
   // Stop listening and send the captured answer.
-  const finishAnswerAndSubmit = () => {
+  const finishAnswerAndSubmit = async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
     listeningRef.current = false;
     clearSilence();
+    if (sttEngineRef.current === "server" && recorderRef.current) {
+      const ctl = recorderRef.current;
+      recorderRef.current = null;
+      setMicLevel(0);
+      const blob = await ctl.stop();
+      if (!blob) { submittingRef.current = false; return startRecording(); }
+      setTranscribing(true);
+      let res;
+      try { res = await transcribeBlob(blob); } catch { res = { error: "network" }; }
+      setTranscribing(false);
+      if (res.error) {
+        // Don't lose the turn: let them type it this once.
+        setVoiceNote("We couldn't transcribe that answer (" + res.error + "). Please type it, or tap the mic to try again.");
+        submittingRef.current = false;
+        setTypedMode(true);
+        setPhase("listening");
+        return;
+      }
+      if (!res.text) { submittingRef.current = false; setVoiceNote("We didn't catch that — please answer again."); return startRecording(); }
+      setVoiceNote("");
+      setLiveText(res.text);
+      return submitAnswer(res.text);
+    }
     try { recognitionRef.current?.stop?.(); } catch {}
     const text = (answerRef.current || liveText || "").trim();
     submitAnswer(text);
@@ -438,6 +488,7 @@ export default function AiInterviewPage() {
       setAiText(text);
       setLiveText("");
       setTyped("");
+      if (sttEngineRef.current !== "typed") setTypedMode(false);
       setPhase("speaking");
       speak(text, () => {
         // Small gap so the speakers are quiet before the mic opens.
@@ -457,7 +508,7 @@ export default function AiInterviewPage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return res.json();
+    try { return await res.json(); } catch { return { error: `server ${res.status}` }; }
   };
 
   const clientProfile = () => ({
@@ -469,12 +520,23 @@ export default function AiInterviewPage() {
   });
 
   const beginLive = async () => {
-    await startMedia();
+    // Must run inside the click (before any await) so Safari/iOS allow audio.
+    primeAudio();
+    try { document.documentElement.requestFullscreen?.()?.catch?.(() => {}); } catch {}
+    setVoiceNote("");
+    try { speakerRef.current?.stop(); } catch {}
+    speakerRef.current = null;
+    const [, caps] = await Promise.all([startMedia(), fetchVoiceCaps()]);
+    capsRef.current = caps;
+    speakerRef.current = createSpeaker({ serverTts: capsRef.current.tts });
+    const engine = streamRef.current?.getAudioTracks?.().length ? chooseSttEngine({ serverStt: capsRef.current.stt }) : "typed";
     setSessionSecs(0);
     setExchangeNo(0);
     setEngineError(null);
     setStartError(null);
     setTypedMode(false);
+    applyEngine(engine);
+    if (engine === "typed") setVoiceNote(streamRef.current?.getAudioTracks?.().length ? "Voice answers aren't available in this browser yet — type your answers. The interviewer will still speak." : "No microphone was found, so you'll type your answers.");
     finalizedRef.current = false;
     submittingRef.current = false;
     convoRef.current = [];
@@ -483,9 +545,6 @@ export default function AiInterviewPage() {
     setResult(null);
     setPhase("loading");
     setStep("live");
-    try { await document.documentElement.requestFullscreen?.(); } catch {}
-    // Warm up voices (some browsers populate the list lazily).
-    try { window.speechSynthesis?.getVoices?.(); } catch {}
 
     let data = null;
     try {
@@ -496,7 +555,7 @@ export default function AiInterviewPage() {
 
     if (data?.blocked) {
       // Server enforced the retake cooldown — return to the lock screen.
-      try { window.speechSynthesis?.cancel(); } catch {}
+      try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
       teardownVoice();
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       stopMedia();
@@ -519,7 +578,7 @@ export default function AiInterviewPage() {
     } else {
       // A key IS configured but the engine couldn't start. Do NOT fall back to
       // fake scripted scores — surface the real reason so it can be fixed.
-      try { window.speechSynthesis?.cancel(); } catch {}
+      try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
       teardownVoice();
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       stopMedia();
@@ -532,7 +591,7 @@ export default function AiInterviewPage() {
   const submitAnswer = async (rawText) => {
     const text = (rawText ?? "").trim();
     teardownVoice();
-    try { window.speechSynthesis?.cancel(); } catch {}
+    try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
     if (!text) {
       // Nothing captured — reopen the mic for another try.
       submittingRef.current = false;
@@ -543,7 +602,7 @@ export default function AiInterviewPage() {
     setLiveText("");
     setTyped("");
 
-    if (mode === "demo") {
+    if (modeRef.current === "demo") {
       const nextIdx = qiRef.current + 1;
       qiRef.current = nextIdx;
       if (nextIdx < DEMO_QUESTIONS.length) presentAiTurn(DEMO_QUESTIONS[nextIdx]);
@@ -555,10 +614,15 @@ export default function AiInterviewPage() {
     convoRef.current = [...convoRef.current, { role: "user", content: text }];
     setPhase("thinking");
     let data;
-    try {
-      data = await post({ action: "reply", messages: convoRef.current, sessionId: sessionIdRef.current });
-    } catch {
-      data = { error: "network" };
+    // Retry brief outages (network blips, provider overload) before giving up.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        data = await post({ action: "reply", messages: convoRef.current, sessionId: sessionIdRef.current });
+      } catch {
+        data = { error: "network" };
+      }
+      if (!data?.error || !/network|overload|429|5\d\d|timed out|rate limit/i.test(String(data.error))) break;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
 
     if (data?.final) return finishAi(data.final);
@@ -566,6 +630,16 @@ export default function AiInterviewPage() {
     if (data?.text) {
       convoRef.current = [...convoRef.current, { role: "assistant", content: data.text }];
       presentAiTurn(data.text);
+      return;
+    }
+    if (data?.error && /network|overload|429|5\d\d|timed out|rate limit/i.test(String(data.error))) {
+      // Still unreachable: keep the interview alive and let them resend.
+      convoRef.current = convoRef.current.slice(0, -1);
+      setTyped(text);
+      setTypedMode(true);
+      setVoiceNote("We couldn't reach the interviewer just now. Your answer is below — tap Send to try again.");
+      submittingRef.current = false;
+      setPhase("listening");
       return;
     }
     setEngineError(data?.error || "engine");
@@ -583,7 +657,7 @@ export default function AiInterviewPage() {
   const finalizeAi = async () => {
     setStep("processing");
     teardownVoice();
-    try { window.speechSynthesis?.cancel(); } catch {}
+    try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     stopMedia();
     let data;
@@ -630,7 +704,7 @@ export default function AiInterviewPage() {
   const finishDemo = () => {
     setStep("processing");
     teardownVoice();
-    try { window.speechSynthesis?.cancel(); } catch {}
+    try { speakerRef.current?.stop(); window.speechSynthesis?.cancel(); } catch {}
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     stopMedia();
     setTimeout(() => {
@@ -648,7 +722,7 @@ export default function AiInterviewPage() {
     finalizedRef.current = true;
     setShowEnd(false);
     teardownVoice();
-    if (mode === "ai") finalizeAi();
+    if (modeRef.current === "ai") finalizeAi();
     else finishDemo();
   };
 
@@ -857,7 +931,7 @@ export default function AiInterviewPage() {
               Start interview
             </button>
             <p style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 10 }}>
-              Tip: use Chrome or Edge for the spoken conversation, and allow the microphone when prompted. A quiet room gives the best results.
+              Tip: the spoken conversation works in any modern browser (Chrome, Edge, Firefox, Safari, mobile). Allow the microphone when prompted. A quiet room gives the best results, and you can type an answer any time.
             </p>
           </div>
 
@@ -917,7 +991,7 @@ export default function AiInterviewPage() {
                 : phase === "speaking"
                 ? "AI interviewer is speaking…"
                 : phase === "listening"
-                ? (typedMode ? "Type your answer below" : "Listening — answer out loud")
+                ? (typedMode ? "Type your answer below" : transcribing ? "Got it — transcribing your answer…" : "Listening — answer out loud")
                 : ""}
             </span>
             <p className="qtext">{phase === "loading" ? "Please wait a moment." : aiText}</p>
@@ -953,7 +1027,7 @@ export default function AiInterviewPage() {
           ) : typedMode ? (
             // Fallback: browser without speech recognition.
             <div style={{ width: "100%", maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: 10 }}>
-              <span className="answer-hint">Voice input isn&apos;t available in this browser — type your answer.</span>
+              <span className="answer-hint">{voiceNote || "Type your answer, then send."}</span>
               <textarea
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
@@ -961,9 +1035,45 @@ export default function AiInterviewPage() {
                 placeholder="Type your answer, then send."
                 style={{ width: "100%", resize: "vertical", borderRadius: 12, padding: "12px 14px", border: "1px solid rgba(255,255,255,.25)", background: "rgba(255,255,255,.08)", color: "#fff", fontSize: 15, lineHeight: 1.5, outline: "none" }}
               />
-              <div className="answer-row" style={{ justifyContent: "flex-end" }}>
+              <div className="answer-row" style={{ justifyContent: "flex-end", gap: 12 }}>
+                {sttEngine !== "typed" && (
+                  <button className="mic-btn" aria-label="Answer by voice instead" title="Answer by voice instead" onClick={() => { setVoiceNote(""); setTypedMode(false); teardownVoice(); startListening(); }}>
+                    <IconMic />
+                  </button>
+                )}
                 <button className="kiosk-next" onClick={submitTyped} disabled={!typed.trim()} style={!typed.trim() ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
                   Send answer <IconChevronRight width={16} height={16} />
+                </button>
+              </div>
+            </div>
+          ) : sttEngine === "server" ? (
+            // Record → server transcription (Firefox, Safari, mobile, Brave…).
+            <div style={{ width: "100%", maxWidth: 820, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+              <div className="waveform" aria-hidden style={{ opacity: transcribing ? 0.35 : 1 }}>
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <i key={i} style={{ animation: "none", height: `${Math.max(6, Math.round(6 + micLevel * 34 * (1 - Math.abs(i - 4) / 6)))}px`, transition: "height .08s linear" }} />
+                ))}
+              </div>
+              <div style={{ minHeight: 44, textAlign: "center", color: "#eaf0ff", fontSize: 15, lineHeight: 1.5, maxWidth: 760 }}>
+                {transcribing ? (
+                  <span className="answer-hint"><span className="spin" style={{ width: 16, height: 16, display: "inline-block", verticalAlign: "-3px", marginRight: 8 }} />Transcribing your answer…</span>
+                ) : voiceNote ? (
+                  <span className="answer-hint">{voiceNote}</span>
+                ) : spoke ? (
+                  <span className="answer-hint">Recording · {Math.floor(recSecs / 60)}:{String(recSecs % 60).padStart(2, "0")} — I&apos;ll send it when you pause.</span>
+                ) : (
+                  <span className="answer-hint">Start speaking — I&apos;m listening. I&apos;ll respond when you pause.</span>
+                )}
+              </div>
+              <div className="answer-row" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <button className="kiosk-next" onClick={finishAnswerAndSubmit} disabled={!spoke || transcribing} style={!spoke || transcribing ? { opacity: 0.5, cursor: "not-allowed" } : undefined}>
+                  I&apos;m done — send <IconChevronRight width={16} height={16} />
+                </button>
+                <button className="mic-btn" aria-label="Restart answer" title="Clear and re-answer" disabled={transcribing} onClick={() => { setVoiceNote(""); teardownVoice(); startListening(); }}>
+                  <IconRefresh />
+                </button>
+                <button className="mic-btn" aria-label="Type instead" title="Type instead" disabled={transcribing} onClick={() => { teardownVoice(); setTypedMode(true); }} style={{ fontSize: 13, fontWeight: 700 }}>
+                  Aa
                 </button>
               </div>
             </div>
@@ -987,6 +1097,9 @@ export default function AiInterviewPage() {
                   onClick={() => { teardownVoice(); startListening(); }}
                 >
                   <IconRefresh />
+                </button>
+                <button className="mic-btn" aria-label="Type instead" title="Type instead" onClick={() => { teardownVoice(); setTypedMode(true); }} style={{ fontSize: 13, fontWeight: 700 }}>
+                  Aa
                 </button>
               </div>
             </div>

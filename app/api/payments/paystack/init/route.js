@@ -61,6 +61,7 @@ export async function POST(request) {
     candidate_id: me.id,
     purpose,
     role_key: roleKey,
+    tier: purpose === "training" ? tier : null,
     amount,
     currency: settings.currency || "NGN",
     reference,

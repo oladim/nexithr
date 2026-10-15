@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings } from "@/lib/db";
 import { runNudges } from "@/lib/reminders";
+import { runSubscriptionReminders } from "@/lib/subscriptions";
 import { purgeStorageTrash } from "@/lib/cvStore";
 import { maintenanceStatus, maintenanceFromSettings } from "@/lib/maintenance";
 
@@ -31,9 +32,11 @@ async function run(request) {
   const dryRun = new URL(request.url).searchParams.get("dry") === "1";
   try {
     const r = await runNudges(admin, s, { dryRun });
+    // Subscription expiry reminders (7 days, 1 day, expired).
+    const subs = await runSubscriptionReminders(admin, s, { dryRun }).catch((e) => ({ error: e.message }));
     // Housekeeping: delete replaced CV files still queued for removal.
     const purged = dryRun ? 0 : await purgeStorageTrash(admin, 500).catch(() => 0);
-    return NextResponse.json({ ok: true, dryRun, ...r, purgedFiles: purged });
+    return NextResponse.json({ ok: true, dryRun, ...r, subscriptions: subs, purgedFiles: purged });
   } catch (e) {
     return NextResponse.json({ error: e.message || String(e) }, { status: 500 });
   }

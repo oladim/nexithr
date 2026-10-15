@@ -5,6 +5,8 @@ import { STATS, TREND, ROLE_DIST, STAGE_BARS } from "@/components/admin/data";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadAdminStats, loadAdminCharts } from "@/lib/db";
+import Link from "next/link";
+import { formatNaira } from "@/lib/money";
 
 export default function AdminDashboard() {
   const { supabaseEnabled } = useAuth();
@@ -14,6 +16,15 @@ export default function AdminDashboard() {
   const [trendLabels, setTrendLabels] = useState(null);
   const [stageBars, setStageBars] = useState(STAGE_BARS);
   const maxBar = Math.max(...stageBars.map((b) => b.value), 1);
+  // Revenue tiles: only for admins with the "revenue" permission (API returns 403 otherwise).
+  const [rev, setRev] = useState(supabaseEnabled ? null : { total: 1679973, month: 149995, subscribers: { active: 21, expiring: 3 }, pending: 1 });
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    fetch("/api/admin/revenue?view=summary", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setRev(j))
+      .catch(() => {});
+  }, [supabaseEnabled]);
 
   // Real mode: replace the KPI cards + distribution donut with live counts.
   useEffect(() => {
@@ -59,6 +70,15 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
+
+      {rev && (
+        <div className="ad-rev">
+          <Link href="/admin/revenue" className="iv-stat"><p className="v">{formatNaira(rev.total)}</p><p className="l">Total revenue</p></Link>
+          <Link href="/admin/revenue" className="iv-stat"><p className="v">{formatNaira(rev.month)}</p><p className="l">Revenue this month</p></Link>
+          <Link href="/admin/revenue" className="iv-stat"><p className="v">{rev.subscribers?.active ?? 0}</p><p className="l">Active subscribers</p></Link>
+          <Link href="/admin/revenue" className="iv-stat"><p className="v">{rev.subscribers?.expiring ?? 0}</p><p className="l">Expiring in 30 days</p></Link>
+        </div>
+      )}
 
       <div className="iv-2col" style={{ marginBottom: 24 }}>
         <div className="card pad">

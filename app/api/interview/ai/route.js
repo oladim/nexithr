@@ -26,6 +26,7 @@ function speakable(text) {
 
 // Node runtime: needs the PDF parser + server fetch to Anthropic.
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * AI Adaptive Interview — the conversational engine.
@@ -325,11 +326,17 @@ export async function POST(request) {
 
     // Give enough room that if the model decides to end on this turn, the whole
     // Final Assessment JSON fits (truncation is what used to leak it to TTS).
-    const res = await anthropicChat({ system, messages, maxTokens: 1400 });
+    // Newer models reject a conversation that ends on an assistant turn
+    // ("prefill"), so make sure the last turn is the candidate's.
+    if (messages[messages.length - 1].role !== "user") {
+      messages.push({ role: "user", content: "(The candidate is waiting for your next question.)" });
+    }
+    const res = await anthropicChat({ system, messages, maxTokens: 3000 });
     if (res.error) return NextResponse.json({ error: res.error, mode: "demo" }, { status: 200 });
 
     // If the model is ending the interview on this turn, NEVER speak the report.
-    const looksFinal = res.text.includes(FINAL_MARKER) || /```/.test(res.text) || /"competencies"\s*:/.test(res.text);
+    // (A code fence alone isn't a report — a question may quote a code snippet.)
+    const looksFinal = /"final"\s*:\s*true/.test(res.text) || /"competencies"\s*:/.test(res.text);
     if (looksFinal) {
       const parsed = parseFinalAssessment(res.text);
       if (parsed.assessment) {
@@ -352,13 +359,31 @@ export async function POST(request) {
     if (!system) return NextResponse.json({ error: "no-context", mode: "demo" }, { status: 200 });
 
     const messages = sanitizeMessages(body?.messages);
-    messages.push({ role: "user", content: END_SIGNAL });
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === "user") lastMsg.content += "\n\n" + END_SIGNAL;
+    else messages.push({ role: "user", content: END_SIGNAL });
 
-    const res = await anthropicChat({ system, messages, maxTokens: 1500, temperature: 0.3 });
+    let res = await anthropicChat({ system, messages, maxTokens: 4000 });
     if (res.error) return NextResponse.json({ error: res.error, mode: "demo" }, { status: 200 });
 
-    const parsed = parseFinalAssessment(res.text);
-    if (parsed.error) return NextResponse.json({ mode: "ai", text: res.text, final: null, parseError: parsed.error });
+    let parsed = parseFinalAssessment(res.text);
+    if (parsed.error) {
+      // One repair pass: hand the model its own output and ask for clean JSON.
+      const retry = await anthropicChat({
+        system,
+        messages: [
+          ...messages,
+          { role: "assistant", content: res.text.slice(0, 12000) },
+          { role: "user", content: "That report was not valid JSON (" + parsed.error + "). Output the complete Final Assessment Report again as ONE valid JSON object only — no markdown fences, no text before or after it. Keep every string short." },
+        ],
+        maxTokens: 4000,
+      });
+      if (!retry.error) {
+        const again = parseFinalAssessment(retry.text);
+        if (again.assessment) { res = retry; parsed = again; }
+      }
+    }
+    if (parsed.error) return NextResponse.json({ mode: "ai", text: speakable(res.text), final: null, parseError: parsed.error });
     const meFin = await getSessionProfile().catch(() => null);
     const persisted = await persistAiResult(meFin, parsed.assessment);
     return NextResponse.json({ mode: "ai", final: parsed.assessment, persisted });

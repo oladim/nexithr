@@ -4,6 +4,7 @@ import { getServiceSupabase } from "@/lib/supabase/admin";
 import { paystackVerify } from "@/lib/paystack";
 import { notifyUser } from "@/lib/notify";
 import { alertAdmins } from "@/lib/adminAlert";
+import { grantSubscription } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
 
@@ -38,7 +39,11 @@ export async function POST(request) {
   }
 
   // Mark paid, then apply the effect.
-  await admin.from("candidate_payments").update({ status: "success", paid_at: new Date().toISOString() }).eq("reference", reference);
+  // Conditional update so two verify calls racing can't apply the effect twice.
+  const { data: claimed } = await admin.from("candidate_payments")
+    .update({ status: "success", paid_at: new Date().toISOString() })
+    .eq("reference", reference).neq("status", "success").select("id");
+  if (!claimed?.length) return NextResponse.json({ ok: true, already: true, purpose: pay.purpose, roleKey: pay.role_key });
 
   await alertAdmins(admin, {
     key: `pay:${reference}`,
@@ -51,19 +56,9 @@ export async function POST(request) {
 
   if (pay.purpose === "subscription") {
     // Extend from the later of now or the current expiry, by one year.
-    const { data: cand } = await admin.from("candidates").select("subscription_until").eq("id", me.id).maybeSingle();
-    const base = cand?.subscription_until && new Date(cand.subscription_until) > new Date() ? new Date(cand.subscription_until) : new Date();
-    base.setFullYear(base.getFullYear() + 1);
-    await admin.from("candidates").update({ subscription_until: base.toISOString() }).eq("id", me.id);
-    await notifyUser(admin, {
-      userId: me.id,
-      email: me.email || me.authEmail,
-      name: me.full_name,
-      title: "Subscription active",
-      body: `Your annual subscription is active until ${base.toDateString()}. You now have unlimited AI interview retakes and access to suggested training.`,
-      cta: { label: "Go to training", path: "/dashboard/training" },
-    });
-    return NextResponse.json({ ok: true, purpose: "subscription", subscriptionUntil: base.toISOString() });
+    const g = await grantSubscription(admin, { candidateId: me.id, source: "paystack", months: 12, paymentId: pay.id, amount: pay.amount, note: `Paystack ${reference}` });
+    if (g.error) return NextResponse.json({ error: g.error }, { status: 500 });
+    return NextResponse.json({ ok: true, purpose: "subscription", subscriptionUntil: g.until });
   }
 
   // training

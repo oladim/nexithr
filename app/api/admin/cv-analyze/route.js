@@ -6,6 +6,7 @@ import { loadRoleRequirements } from "@/lib/db";
 
 // Node runtime (needs the PDF parser + fetch to the LLM).
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 // POST /api/admin/cv-analyze { cvId } — admins only.
 // Reads the stored CV, extracts its text, and returns an LLM assessment
