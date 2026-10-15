@@ -9,7 +9,9 @@ import { IconChart, IconUser, IconBriefcase, IconRocket, IconCheck, IconLock, Ic
  * Each stage is gated on the previous one passing.
  */
 export default function InterviewJourney() {
-  const { app } = useAuth();
+  const { app, supabaseEnabled } = useAuth();
+  // The AI interview unlocks only once the CV is uploaded AND approved.
+  const cvApproved = !!app.cv && (!supabaseEnabled || app.cv.status === "Approved");
 
   const aiPassed = !!app.aiInterview?.passed;
   const aiAttempted = (app.aiInterview?.attempts ?? 0) > 0;
@@ -22,8 +24,8 @@ export default function InterviewJourney() {
       label: "AI Interview",
       Icon: IconChart,
       href: "/dashboard/interview/ai",
-      status: aiPassed ? "passed" : aiAttempted ? "failed" : "ready",
-      unlocked: true,
+      status: aiPassed ? "passed" : !cvApproved && !aiAttempted ? "cv" : aiAttempted ? "failed" : "ready",
+      unlocked: cvApproved || aiAttempted,
     },
     {
       key: "Professional",
@@ -61,6 +63,8 @@ export default function InterviewJourney() {
       ? "Retry needed"
       : s.status === "ready"
       ? "Ready"
+      : s.status === "cv"
+      ? "CV approval first"
       : "Locked";
 
   return (
@@ -85,7 +89,7 @@ export default function InterviewJourney() {
                 <span className={`jt-node ${s.status}`}>
                   {s.status === "passed" ? (
                     <IconCheck width={18} height={18} />
-                  ) : s.status === "locked" ? (
+                  ) : s.status === "locked" || s.status === "cv" ? (
                     <IconLock width={15} height={15} />
                   ) : (
                     <s.Icon width={18} height={18} />
@@ -115,6 +119,16 @@ export default function InterviewJourney() {
 }
 
 function JourneyCta({ steps }) {
+  if (steps[0].status === "cv") {
+    return (
+      <div className="journey-cta">
+        <span>Next up: <b>get your CV approved</b> — the AI interview unlocks once our team approves it.</span>
+        <Link href="/dashboard/cv-upload" className="btn-solid" style={{ padding: "9px 18px", fontSize: 13 }}>
+          Go to my CV <IconArrowRight width={14} height={14} />
+        </Link>
+      </div>
+    );
+  }
   const next = steps.find((s) => s.unlocked && s.status !== "passed" && s.key !== "Board");
   if (!next) {
     const board = steps.find((s) => s.key === "Board");

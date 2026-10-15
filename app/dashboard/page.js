@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import LevelSuggestion from "@/components/dashboard/LevelSuggestion";
+import NextStepCard from "@/components/dashboard/NextStepCard";
+import MyRoles from "@/components/dashboard/MyRoles";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
@@ -50,6 +52,7 @@ export default function DashboardHome() {
   const { user, app, supabaseEnabled } = useAuth();
   const firstName = (user?.name || "there").split(" ")[0];
   const hasCv = !!app.cv;
+  const cvApproved = hasCv && (!supabaseEnabled || app.cv.status === "Approved");
   const [jobs, setJobs] = useState(supabaseEnabled ? null : JOBS); // null = loading (real mode)
 
   // Real mode: live token balance + open jobs from the database.
@@ -136,6 +139,7 @@ export default function DashboardHome() {
       </div>
 
       <LevelSuggestion />
+      <NextStepCard />
 
       {/* Certificate — unlocked once every stage is passed */}
       {app.aiInterview?.passed && app.stages?.Professional?.passed && app.stages?.HR?.passed && (
@@ -175,6 +179,8 @@ export default function DashboardHome() {
         </Link>
       </div>
 
+      <MyRoles />
+
       {/* Stats */}
       <div className="stat-grid">
         <div className="stat-card a">
@@ -212,8 +218,8 @@ export default function DashboardHome() {
               ) : (
                 <div className="empty-cta">
                   <p>Your competency breakdown appears here after your AI interview.</p>
-                  <Link href={hasCv ? "/dashboard/interview/ai" : "/dashboard/cv-upload"} className="btn-outline">
-                    {hasCv ? "Take the AI interview" : "Upload your CV to begin"}
+                  <Link href={cvApproved ? "/dashboard/interview/ai" : "/dashboard/cv-upload"} className="btn-outline">
+                    {cvApproved ? "Take the AI interview" : hasCv ? "Check your CV status" : "Upload your CV to begin"}
                   </Link>
                 </div>
               )}

@@ -8,29 +8,67 @@ import { IconLock, IconCheck } from "@/components/Icons";
 // admins) must have Google Authenticator TOTP enabled before they can use any
 // portal. If 2FA isn't set up yet, this blocks the portal and walks the user
 // through enrollment. Demo mode (no Supabase) is exempt.
+// Ask the server whether 2FA is on. Returns true/false only for a definite
+// answer; null when the check itself failed (network, session refresh race,
+// server error) — which must never be mistaken for "not enrolled".
+export async function fetch2faStatus() {
+  for (const wait of [0, 500, 1200, 2500]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      const r = await fetch("/api/2fa", { cache: "no-store" });
+      if (r.ok) {
+        const d = await r.json();
+        if (typeof d.enabled === "boolean") return d.enabled;
+      }
+    } catch { /* retry */ }
+  }
+  return null;
+}
+
+const cacheKey = (u) => `nexit.2fa.on.${(u?.email || "").toLowerCase()}`;
+
 export default function TwoFactorGate({ children }) {
-  const { supabaseEnabled } = useAuth();
-  const [enabled, setEnabled] = useState(null); // null = loading
+  const { supabaseEnabled, user } = useAuth();
+  // Remembered "2FA is on" for this user in this browser tab → no flash and
+  // no false setup prompt while the server is re-checked in the background.
+  const cachedOn = () => { try { return sessionStorage.getItem(cacheKey(user)) === "1"; } catch { return false; } };
+  const [enabled, setEnabled] = useState(null); // null = loading, "error" = couldn't check
   const [setup, setSetup] = useState(null);      // { qr, secret, otpauthUrl }
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  const remember = (on) => { try { on ? sessionStorage.setItem(cacheKey(user), "1") : sessionStorage.removeItem(cacheKey(user)); } catch { /* ignore */ } };
   const load = async () => {
-    try { const r = await fetch("/api/2fa"); const d = await r.json(); setEnabled(!!d.enabled); }
-    catch { setEnabled(false); }
+    if (cachedOn()) setEnabled(true);
+    const on = await fetch2faStatus();
+    if (on === null) { if (!cachedOn()) setEnabled("error"); return; }
+    remember(on);
+    setEnabled(on);
   };
-  useEffect(() => { if (supabaseEnabled) load(); else setEnabled(true); }, [supabaseEnabled]);
+  useEffect(() => { if (supabaseEnabled) load(); else setEnabled(true); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [supabaseEnabled, user?.email]);
 
   if (!supabaseEnabled) return children;
   if (enabled === null) return null;        // brief loading flash
-  if (enabled) return children;             // already protected
+  if (enabled === true) return children;    // already protected
+  if (enabled === "error") {
+    return (
+      <div className="assess" style={{ maxWidth: 520, margin: "40px auto" }}>
+        <div className="card pad">
+          <h3 className="card-title" style={{ marginTop: 0 }}>We couldn&apos;t confirm your security settings</h3>
+          <p style={{ fontSize: 14, color: "var(--muted)" }}>This is usually a brief connection problem. Your two-factor setup hasn&apos;t changed.</p>
+          <button className="btn-solid" onClick={() => { setEnabled(null); load(); }}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   const startSetup = async () => {
     setErr(""); setBusy(true);
     try {
       const r = await fetch("/api/2fa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "setup" }) });
       const d = await r.json();
+      if (!r.ok && /already enabled/i.test(d.error || "")) { remember(true); setEnabled(true); setBusy(false); return; }
       if (!r.ok) { setErr(d.error || "Couldn't start setup"); setBusy(false); return; }
       setSetup(d);
     } catch { setErr("Couldn't start setup"); }
@@ -43,7 +81,7 @@ export default function TwoFactorGate({ children }) {
       const r = await fetch("/api/2fa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "enable", code }) });
       const d = await r.json();
       if (!r.ok) { setErr(d.error || "That code didn't match"); setBusy(false); return; }
-      setEnabled(true); setSetup(null); setCode("");
+      remember(true); setEnabled(true); setSetup(null); setCode("");
     } catch { setErr("Couldn't enable 2FA"); }
     setBusy(false);
   };

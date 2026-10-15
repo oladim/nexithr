@@ -501,3 +501,19 @@ export function IconLinkedin(props) {
     </svg>
   );
 }
+
+export function IconTrash(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function IconSwap(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

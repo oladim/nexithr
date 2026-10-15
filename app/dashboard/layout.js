@@ -24,6 +24,7 @@ import BrandLogo from "@/components/BrandLogo";
 import TopbarActions from "@/components/TopbarActions";
 import ConsentBanner from "@/components/ConsentBanner";
 import MaintenanceGate from "@/components/MaintenanceGate";
+import PaymentSoon from "@/components/PaymentSoon";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
@@ -39,12 +40,18 @@ const NAV = [
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, hydrated, logout } = useAuth();
+  const { user, hydrated, logout, confirmSignedOut } = useAuth();
   const [open, setOpen] = useState(false); // mobile drawer
 
   // Route guard — bounce to login if there's no session.
   useEffect(() => {
-    if (hydrated && !user) router.replace("/login");
+    if (!hydrated || user) return undefined;
+    // Re-check before bouncing: a momentary auth hiccup isn't a sign-out.
+    let live = true;
+    confirmSignedOut().then((out) => {
+      if (live && out) router.replace(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+    });
+    return () => { live = false; };
   }, [hydrated, user, router]);
 
   // Close the drawer whenever the route changes.
@@ -109,7 +116,7 @@ export default function DashboardLayout({ children }) {
           <TopbarActions nav={NAV} profileHref="/dashboard/profile" settingsHref="/dashboard/settings" securityHref="/dashboard/settings?view=security" />
         </header>
 
-        <div className="content"><ConsentBanner href="/dashboard/settings?view=privacy" /><MaintenanceGate><TwoFactorGate>{children}</TwoFactorGate></MaintenanceGate></div>
+        <div className="content"><ConsentBanner href="/dashboard/settings?view=privacy" /><MaintenanceGate><TwoFactorGate>{children}</TwoFactorGate></MaintenanceGate><PaymentSoon /></div>
       </div>
     </div>
   );

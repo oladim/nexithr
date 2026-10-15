@@ -97,7 +97,7 @@ export default function InterviewerProfile() {
         {supabaseEnabled && (
           <label className="btn-outline" style={{ alignSelf: "flex-start", cursor: "pointer" }}>
             <IconUpload width={15} height={15} /> Change photo
-            <input type="file" accept="image/*" onChange={onPhoto} style={{ display: "none" }} />
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhoto} style={{ display: "none" }} />
           </label>
         )}
 

@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AREAS, ROLES, LEVELS, areaOf, baseKeyOf, levelOf } from "@/lib/roleCatalog";
 import { useAuth } from "@/components/context/AuthContext";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { loadCvSubmissions, cvSignedUrl, loadRoleRequirements } from "@/lib/db";
 import { computeCvMatch, DEFAULT_REQS_BY_KEY } from "@/lib/cvMatch";
-import { IconFileText, IconDownload, IconCheck, IconRefresh, IconX, IconBolt } from "@/components/Icons";
+import { IconFileText, IconDownload, IconCheck, IconRefresh, IconX, IconBolt, IconSearch, IconTrash } from "@/components/Icons";
+import RemindButton from "@/components/admin/RemindButton";
 
 // Demo submissions so the queue isn't empty without a backend.
 const DEMO = [
-  { id: "d1", candidateId: "d1", name: "Ada Obi", email: "ada@nexit.africa", roleKey: "software", targetRole: "Software Development", skills: ["React", "Node js", "SQL"], experience: "5 Years", fileName: "Ada_Obi_CV.pdf", industry: "Software", jobType: "Full-time", status: "Pending review", reviewNote: null },
-  { id: "d2", candidateId: "d2", name: "Musa Bello", email: "musa@nexit.africa", roleKey: "data", targetRole: "Data & Analytics", skills: ["Figma", "Research"], experience: "3 Years", fileName: "Musa_Bello_CV.pdf", industry: "Product & Design", jobType: "Full-time", status: "Pending review", reviewNote: null },
-  { id: "d3", candidateId: "d3", name: "Rose Adeyemi", email: "rose@nexit.africa", roleKey: "product", targetRole: "Product & Design", skills: ["Figma", "Prototyping", "User Research", "Design Systems"], experience: "4 Years", fileName: "Rose_Adeyemi_CV.pdf", industry: "Product & Design", jobType: "Contract", status: "Approved", reviewNote: "Great fit — advanced to AI interview." },
+  { id: "d1", candidateId: "d1", name: "Ada Obi", email: "ada@nexit.africa", roleKey: "software-frontend-mid", targetRole: "Frontend Developer (Mid-level)", skills: ["React", "TypeScript", "CSS"], experience: "5 Years", fileName: "Ada_Obi_CV.pdf", industry: "Software", jobType: "Full-time", status: "Pending review", reviewNote: null, uploadedAt: "2026-10-12T09:00:00Z" },
+  { id: "d2", candidateId: "d2", name: "Musa Bello", email: "musa@nexit.africa", roleKey: "data-analyst-senior", targetRole: "Data Analyst (Senior)", skills: ["SQL", "Excel"], experience: "3 Years", fileName: "Musa_Bello_CV.docx", industry: "Data & Analytics", jobType: "Full-time", status: "Pending review", reviewNote: null, uploadedAt: "2026-10-11T15:20:00Z", revision: 2, previousStatus: "Changes requested", previousNote: "Please add the dashboards you built and the tools you used (SQL, Power BI)." },
+  { id: "d3", candidateId: "d3", name: "Rose Adeyemi", email: "rose@nexit.africa", roleKey: "product-uiux-mid", targetRole: "UI/UX Designer (Mid-level)", skills: ["Figma", "Prototyping", "User Research", "Design Systems"], experience: "4 Years", fileName: "Rose_Adeyemi_CV.pdf", industry: "Product & Design", jobType: "Contract", status: "Approved", reviewNote: "Great fit — advanced to AI interview.", uploadedAt: "2026-10-08T11:00:00Z" },
+  { id: "d4", candidateId: "d4", name: "Chidi Okeke", email: "chidi@nexit.africa", roleKey: "support-sysadmin-mid", targetRole: "Systems Administrator (Mid-level)", skills: ["Linux", "Bash", "Active Directory"], experience: "2 Years", fileName: "Chidi_Okeke_CV.pdf", industry: "IT Support", jobType: "Full-time", status: "Level suggested", reviewNote: null, uploadedAt: "2026-10-10T08:30:00Z" },
+  { id: "d5", candidateId: "d5", name: "Fatima Sani", email: "fatima@nexit.africa", roleKey: "security-soc-junior", targetRole: "SOC Analyst (Junior)", skills: ["SIEM", "Networking"], experience: "1 Year", fileName: "Fatima_Sani_CV.pdf", industry: "Cybersecurity", jobType: "Full-time", status: "Changes requested", reviewNote: "Add your lab projects.", uploadedAt: "2026-10-09T13:10:00Z" },
+  { id: "d6", candidateId: "d3", name: "Rose Adeyemi", email: "rose@nexit.africa", roleKey: "product-research-mid", activeRole: "product-uiux-mid", targetRole: "UX Researcher (Mid-level)", skills: ["User Research"], experience: "4 Years", fileName: "Rose_Adeyemi_Research_CV.pdf", industry: "Product & Design", jobType: "Contract", status: "Pending review", reviewNote: null, uploadedAt: "2026-10-13T10:00:00Z" },
 ];
+
+const STATUSES = ["Pending review", "Level suggested", "Changes requested", "Approved", "Rejected"];
+const norm = (t) => String(t || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
 
 const STATUS_CLASS = { "Approved": "done", "Rejected": "failed", "Changes requested": "pending", "Pending review": "pending", "Level suggested": "approved" };
 
@@ -62,8 +70,42 @@ export default function CvReviews() {
 
   const onReviewed = (id, status, note) =>
     setSubs((list) => list.map((s) => (s.id === id ? { ...s, status, reviewNote: note } : s)));
+  const onDeleted = (id) => setSubs((list) => list.filter((s) => s.id !== id));
 
-  const pending = (subs || []).filter((s) => s.status === "Pending review").length;
+  // ---- search & filters ----
+  const [q, setQ] = useState("");
+  const [area, setArea] = useState("");
+  const [base, setBase] = useState("");
+  const [level, setLevel] = useState("");
+  const [status, setStatus] = useState("");
+  const bases = useMemo(() => {
+    const m = new Map();
+    ROLES.filter((r) => !area || r.area === area).forEach((r) => { if (!m.has(r.base)) m.set(r.base, r.baseTitle); });
+    return [...m.entries()];
+  }, [area]);
+  const filtered = useMemo(() => {
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    return (subs || []).filter((s) => {
+      if (status && s.status !== status) return false;
+      if (area && areaOf(s.roleKey) !== area) return false;
+      if (base && baseKeyOf(s.roleKey) !== base) return false;
+      if (level && levelOf(s.roleKey) !== level) return false;
+      if (words.length) {
+        const hay = norm(`${s.name} ${s.email} ${s.fileName} ${s.targetRole}`);
+        if (!words.every((w) => hay.includes(w))) return false;
+      }
+      return true;
+    });
+  }, [subs, q, area, base, level, status]);
+  const counts = useMemo(() => {
+    const c = {};
+    (subs || []).forEach((s) => { c[s.status] = (c[s.status] || 0) + 1; });
+    return c;
+  }, [subs]);
+  const anyFilter = q || area || base || level || status;
+  const clear = () => { setQ(""); setArea(""); setBase(""); setLevel(""); setStatus(""); };
+
+  const pending = counts["Pending review"] || 0;
 
   return (
     <>
@@ -72,37 +114,84 @@ export default function CvReviews() {
         <p>Review submitted CVs against the candidate&apos;s target role. Approve, request changes, or reject with a note the candidate receives.</p>
       </div>
 
-      <div className="cvr-count">{pending} awaiting review · {(subs || []).length} total</div>
+      <div className="cvr-toolbar">
+        <label className="cvr-search">
+          <IconSearch width={16} height={16} />
+          <input type="search" placeholder="Search candidate name, email or file…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search CVs" />
+        </label>
+        <select value={area} onChange={(e) => { setArea(e.target.value); setBase(""); }} aria-label="Area">
+          <option value="">All areas</option>
+          {AREAS.map((a) => <option key={a.key} value={a.key}>{a.title}</option>)}
+        </select>
+        <select value={base} onChange={(e) => setBase(e.target.value)} aria-label="Role">
+          <option value="">All roles</option>
+          {bases.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+        </select>
+        <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Level">
+          <option value="">All levels</option>
+          {LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+        </select>
+      </div>
+      <div className="cvr-chips" role="tablist" aria-label="Status">
+        <button role="tab" aria-selected={!status} className={`cvr-chip ${!status ? "on" : ""}`} onClick={() => setStatus("")}>All <i>{(subs || []).length}</i></button>
+        {STATUSES.map((st) => (
+          <button role="tab" key={st} aria-selected={status === st} className={`cvr-chip ${status === st ? "on" : ""}`} onClick={() => setStatus(st)}>
+            {st} <i>{counts[st] || 0}</i>
+          </button>
+        ))}
+        <span className="cvr-latest">One CV per candidate &amp; role — a new upload replaces the old one</span>
+      </div>
+
+      <div className="cvr-count">
+        {pending} awaiting review · showing {filtered.length} of {(subs || []).length}
+        {anyFilter && <button className="link-btn" style={{ marginLeft: 8 }} onClick={clear}>Clear filters</button>}
+      </div>
 
       <div className="card pad">
         {subs === null ? (
           <p style={{ color: "var(--muted)", fontSize: 14 }}>Loading submissions…</p>
         ) : subs.length === 0 ? (
           <p style={{ color: "var(--muted)", fontSize: 14 }}>No CVs submitted yet.</p>
+        ) : filtered.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontSize: 14 }}>No CVs match these filters.</p>
         ) : (
+          <div className="tbl-scroll">
           <table className="tbl">
             <thead>
               <tr><th>Candidate</th><th>Target role</th><th>CV file</th><th>Status</th><th>Action</th></tr>
             </thead>
             <tbody>
-              {subs.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id}>
                   <td>
                     <b>{s.name}</b>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{s.email}</div>
                   </td>
-                  <td>{s.targetRole}</td>
-                  <td><span className="cvr-file"><IconFileText width={15} height={15} /> {s.fileName}</span></td>
+                  <td>
+                    {s.targetRole}
+                    {s.activeRole && s.roleKey && s.activeRole !== s.roleKey && <div className="cvr-tag">Not their active role</div>}
+                  </td>
+                  <td>
+                    <span className="cvr-file"><IconFileText width={15} height={15} /> {s.fileName}</span>
+                    {s.uploadedAt && <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{new Date(s.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>}
+                  </td>
                   <td>
                     <span className={`pill-status ${STATUS_CLASS[s.status] || "pending"}`}>{s.status}</span>
                     {s.status === "Pending review" && s.levelResponse === "declined" && <div className="cvr-tag">Kept their level — decide</div>}
+                    {s.revision > 1 && <div className="cvr-tag resub" title={s.previousNote || ""}>Resubmitted · v{s.revision}{s.previousStatus ? ` (was ${s.previousStatus})` : ""}</div>}
                     {s.status === "Approved" && s.levelResponse === "accepted" && <div className="cvr-tag ok">Accepted suggested level</div>}
                   </td>
-                  <td><button className="mini-btn" onClick={() => setActive(s)}>Review</button></td>
+                  <td>
+                    <div className="cvr-row-actions">
+                      <button className="mini-btn" onClick={() => setActive(s)}>Review</button>
+                      <RemindButton candidateId={s.candidateId} name={s.name} supabaseEnabled={supabaseEnabled} />
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -113,13 +202,14 @@ export default function CvReviews() {
           supabaseEnabled={supabaseEnabled}
           onClose={() => setActive(null)}
           onDone={(status, note) => { onReviewed(active.id, status, note); setActive(null); }}
+          onDeleted={() => { onDeleted(active.id); setActive(null); }}
         />
       )}
     </>
   );
 }
 
-function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
+function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone, onDeleted }) {
   const expYears = parseInt(String(sub.experience || "").replace(/\D/g, ""), 10) || null;
   const baseMatch = computeCvMatch(sub.skills || [], roleReq, { experienceYears: expYears });
 
@@ -210,6 +300,19 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
     }
   };
 
+  const removeCv = async () => {
+    if (!window.confirm(`Delete ${sub.name}'s CV "${sub.fileName}"? The file and the review record are removed permanently. The candidate will be asked to upload a new CV.`)) return;
+    setErr("");
+    if (!supabaseEnabled) { onDeleted(); return; }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/cv-delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cvId: sub.id, notify: true }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      onDeleted();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
   return (
     <div className="cvr-scrim" onClick={onClose}>
       <div className="cvr-modal" onClick={(e) => e.stopPropagation()}>
@@ -220,6 +323,13 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
           </div>
           <button className="cvr-x" onClick={onClose} aria-label="Close"><IconX width={18} height={18} /></button>
         </div>
+
+        {sub.revision > 1 && (
+          <div className="cvr-resub">
+            <b>Updated CV — version {sub.revision}.</b> It replaces the previous version{sub.previousStatus ? `, which was marked “${sub.previousStatus}”` : ""}.
+            {sub.previousNote && <div className="cvr-resub-note"><span>Your earlier note:</span> {sub.previousNote}</div>}
+          </div>
+        )}
 
         {/* CV analysis against the role's required skillset */}
         <div className="cvr-analysis">
@@ -353,6 +463,9 @@ function ReviewPanel({ sub, roleReq, supabaseEnabled, onClose, onDone }) {
         {msg && <div className="role-note ok" style={{ marginTop: 4 }}>{msg}</div>}
 
         <div className="cvr-actions">
+          <button className="btn-outline btn-danger-outline cvr-del" disabled={busy} onClick={removeCv} title="Delete this CV record and its file">
+            <IconTrash width={14} height={14} /> Delete CV
+          </button>
           <button className="btn-outline" disabled={busy} onClick={onClose}>Cancel</button>
           <button className={decision === "reject" ? "btn-decline" : "btn-solid"} disabled={busy || (decision === "level" && !suggestion)}
             onClick={() => submit(DECISIONS.find((d) => d.key === decision).status)}>

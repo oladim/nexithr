@@ -8,6 +8,7 @@ import { TextField, SelectField } from "@/components/auth/Field";
 import OAuthButtons from "@/components/auth/OAuthButtons";
 import RolePicker from "@/components/RolePicker";
 import { useAuth } from "@/components/context/AuthContext";
+import { cvFileProblem } from "@/lib/cvClient";
 import {
   IconUploadCloud,
   IconCode,
@@ -52,7 +53,7 @@ const JOB_FIELDS = [
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup, updateSignup, signUpUser, supabaseEnabled } = useAuth();
+  const { signup, updateSignup, signUpUser, supabaseEnabled, setPendingCv } = useAuth();
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -116,7 +117,7 @@ export default function SignupPage() {
       {key === "personal" && <StepPersonal data={signup} update={updateSignup} onNext={next} onBack={back} />}
       {key === "background" && <StepProfessional data={signup} update={updateSignup} onNext={next} onBack={back} />}
       {key === "target" && <StepTargetJob data={signup} update={updateSignup} onNext={next} onBack={back} />}
-      {key === "cv" && <StepCv data={signup} update={updateSignup} onNext={next} onBack={back} />}
+      {key === "cv" && <StepCv data={signup} update={updateSignup} onNext={next} onBack={back} setPendingCv={setPendingCv} />}
       {key === "org" && <StepOrganisation data={signup} update={updateSignup} onNext={next} onBack={back} />}
       {key === "review" && <StepReview data={signup} role={role} onBack={back} onFinish={finish} error={error} busy={busy} />}
     </AuthLayout>
@@ -390,17 +391,25 @@ function StepTargetJob({ data, update, onNext, onBack }) {
 }
 
 /* ---------- Step 4 — Upload CV (interpretation) ---------- */
-function StepCv({ data, update, onNext, onBack }) {
+function StepCv({ data, update, onNext, onBack, setPendingCv }) {
+  const [err, setErr] = useState("");
   const onFile = (e) => {
     const f = e.target.files?.[0];
-    if (f) update({ cvName: f.name });
+    e.target.value = "";
+    if (!f) return;
+    const why = cvFileProblem(f);
+    if (why) { setErr(why); return; }
+    setErr("");
+    setPendingCv?.(f);
+    update({ cvName: f.name });
   };
+  const skip = () => { setPendingCv?.(null); update({ cvName: "" }); onNext(); };
   return (
     <>
       <h1 className="auth-title">Upload your CV</h1>
       <p className="auth-subtitle">
-        Your CV powers the AI interview — it&apos;s assessed against your chosen
-        role&apos;s requirements. PDF or DOCX, up to 5MB.
+        Your CV is reviewed by our team against your chosen role. Once it&apos;s
+        approved, your AI interview unlocks. PDF or Word .docx, up to 5MB.
       </p>
       <label className="dropzone">
         <span className="zicon">
@@ -409,16 +418,20 @@ function StepCv({ data, update, onNext, onBack }) {
         <p>
           <b>Click to upload</b> or drag and drop
         </p>
-        <p style={{ fontSize: 13, marginTop: 4 }}>PDF, DOC, DOCX (max 5MB)</p>
+        <p style={{ fontSize: 13, marginTop: 4 }}>PDF or Word .docx (max 5MB)</p>
         {data.cvName && <p className="picked">✓ {data.cvName}</p>}
         <input
           type="file"
-          accept=".pdf,.doc,.docx"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={onFile}
           style={{ display: "none" }}
         />
       </label>
-      <div style={{ display: "flex", gap: 16, marginTop: 28 }}>
+      {err && <p className="auth-error" role="alert">{err}</p>}
+      <p className="auth-hint" style={{ fontSize: 13, color: "var(--muted)", marginTop: 10 }}>
+        Your CV is uploaded securely as soon as your account is confirmed. If you confirm from a different device, just upload it again from your dashboard.
+      </p>
+      <div style={{ display: "flex", gap: 16, marginTop: 20 }}>
         <button type="button" className="auth-btn ghost" onClick={onBack}>
           Back
         </button>
@@ -431,6 +444,9 @@ function StepCv({ data, update, onNext, onBack }) {
           Next
         </button>
       </div>
+      <p className="auth-alt" style={{ marginTop: 14 }}>
+        <button type="button" className="link-btn" onClick={skip}>Skip — I&apos;ll upload my CV from my dashboard</button>
+      </p>
     </>
   );
 }

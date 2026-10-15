@@ -3,14 +3,13 @@ import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify";
 import { alertAdmins } from "@/lib/adminAlert";
+import { activeCv } from "@/lib/cvStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 async function latestCv(admin, uid) {
-  const { data } = await admin.from("cvs").select("id, status, suggested_role, original_role, review_note")
-    .eq("candidate_id", uid).order("uploaded_at", { ascending: false }).limit(1).maybeSingle();
-  return data;
+  return activeCv(admin, uid, "id, status, suggested_role, original_role, review_note");
 }
 
 // GET /api/cv/level — the pending level suggestion for the signed-in candidate.
@@ -50,9 +49,12 @@ export async function POST(request) {
 
   if (accept) {
     if (!to || to.enabled === false) return NextResponse.json({ error: "That level isn't open any more. Please contact support." }, { status: 409 });
+    // Already pursuing that exact role as a separate track? Then they can't merge.
+    const { data: dup } = await admin.from("candidate_tracks").select("role_key").eq("candidate_id", me.id).eq("role_key", to.role_key).maybeSingle().then((r) => r, () => ({ data: null }));
+    if (dup) return NextResponse.json({ error: `You already have ${to.title} in My roles. Switch to it there, or keep your current level.` }, { status: 409 });
     const { error: e1 } = await admin.from("candidates").update({ target_role: to.role_key }).eq("id", me.id);
     if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
-    await admin.from("cvs").update({ status: "Approved", level_response: "accepted", level_responded_at: now }).eq("id", cv.id);
+    await admin.from("cvs").update({ status: "Approved", level_response: "accepted", level_responded_at: now, role_key: to.role_key }).eq("id", cv.id);
     await notifyUser(admin, {
       userId: me.id, sendEmail: false,
       title: `You're now applying as ${to.title}`,

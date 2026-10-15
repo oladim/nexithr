@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/context/AuthContext";
 import { startPayment, formatMoney } from "@/lib/billing";
+import { normalizeSuggestions } from "@/lib/trainingSuggestions";
 import TrainingTabs from "@/components/dashboard/TrainingTabs";
 import { IconCap, IconBook, IconCheck, IconClock, IconChart, IconPencil, IconStar, IconChevronRight, IconPlay, IconFileText } from "@/components/Icons";
 
@@ -61,12 +62,12 @@ export default function TrainingOverview() {
   const subscribe = async () => {
     setBusy(true);
     const r = await startPayment({ purpose: "subscription" });
-    if (r?.error) { alert(r.error); setBusy(false); }
+    if (!r?.ok) { if (r?.error) alert(r.error); setBusy(false); }
   };
 
   // Personalised plan from the AI interview.
   const plan = app.aiInterview?.suggestedTraining || null;
-  const planCount = plan ? (plan.technical?.length || 0) + (plan.administrative?.length || 0) : 0;
+  const planCount = normalizeSuggestions(plan).length;
 
   if (data === null) {
     return (<><TrainingTabs /><p style={{ color: "var(--muted)", fontSize: 14 }}>Loading your training…</p></>);
@@ -187,7 +188,7 @@ export default function TrainingOverview() {
                 <span className={`td-dot ${planCount ? "on" : ""}`} />
                 <div>
                   <b>AI suggested plan</b>
-                  <span className="td-muted">{planCount ? `${planCount} skill${planCount === 1 ? "" : "s"} to work on from your AI interview` : "Take the AI interview to get a personalised plan"}</span>
+                  <span className="td-muted">{planCount ? `${planCount} training topic${planCount === 1 ? "" : "s"} suggested from your AI interview` : "Take the AI interview to get a personalised plan"}</span>
                 </div>
               </div>
             </div>

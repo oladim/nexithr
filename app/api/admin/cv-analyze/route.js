@@ -26,12 +26,13 @@ export async function POST(request) {
   // Load the CV + candidate + role requirement.
   const { data: cv, error } = await admin
     .from("cvs")
-    .select("file_path, candidates(target_role, experience, skills)")
+    .select("*, candidates(target_role, experience, skills)")
     .eq("id", cvId)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const roleKey = cv.candidates?.target_role;
+  // The role this CV was filed for (a candidate can pursue several roles).
+  const roleKey = cv.role_key || cv.candidates?.target_role;
   const { byKey } = await loadRoleRequirements(admin);
   const roleReq = byKey[roleKey] || null;
   const candidateSkills = cv.candidates?.skills || [];

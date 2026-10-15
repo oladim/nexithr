@@ -3,6 +3,7 @@ import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings, saveSettings } from "@/lib/db";
 import { ALERT_CATEGORIES } from "@/lib/adminAlert";
+import { paystackEnabled } from "@/lib/paystack";
 import { maintenanceStatus, maintenanceFromSettings, fmtWindow, fmtWhen, SERVER_TZ } from "@/lib/maintenance";
 
 const ALERT_KEYS = ALERT_CATEGORIES.map((c) => c.key);
@@ -18,7 +19,7 @@ export async function GET() {
   const admin = getServiceSupabase();
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
   const settings = await loadSettings(admin);
-  return NextResponse.json({ settings });
+  return NextResponse.json({ settings, paystackConfigured: paystackEnabled() });
 }
 
 const clampPct = (v, d) => {
@@ -81,12 +82,19 @@ export async function POST(request) {
     ai_retake_cooldown_days: int("ai_retake_cooldown_days", 1, 365),
     interview_reminders_enabled: bool("interview_reminders_enabled"),
     interview_reminder_hours: int("interview_reminder_hours", 1, 168),
+    payments_enabled: bool("payments_enabled"),
     training_payments_enabled: bool("training_payments_enabled"),
     interviewer_payouts_enabled: bool("interviewer_payouts_enabled"),
     payout_manual_approval: bool("payout_manual_approval"),
     interviewer_fee_professional: money(body.interviewer_fee_professional, cur.interviewer_fee_professional),
     interviewer_fee_hr: money(body.interviewer_fee_hr, cur.interviewer_fee_hr),
     payout_min_amount: money(body.payout_min_amount, cur.payout_min_amount),
+    // ---- roles + reminders (0037) ----
+    max_roles_per_candidate: int("max_roles_per_candidate", 1, 10),
+    nudges_enabled: bool("nudges_enabled"),
+    nudge_after_days: int("nudge_after_days", 1, 60),
+    nudge_interval_days: int("nudge_interval_days", 1, 60),
+    nudge_max_per_step: int("nudge_max_per_step", 0, 10),
   });
 
   // ---- maintenance ----

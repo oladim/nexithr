@@ -25,7 +25,7 @@ export default function AdminSettings() {
       try {
         const res = await fetch("/api/admin/settings");
         const data = await res.json();
-        if (res.ok && data.settings) setS({ ...DEFAULT_SETTINGS, ...data.settings });
+        if (res.ok && data.settings) setS({ ...DEFAULT_SETTINGS, ...data.settings, _paystack: !!data.paystackConfigured });
       } catch { /* keep defaults */ }
       setLoaded(true);
     })();
@@ -54,7 +54,7 @@ export default function AdminSettings() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setS({ ...DEFAULT_SETTINGS, ...data.settings });
+      setS((p) => ({ ...DEFAULT_SETTINGS, ...data.settings, _paystack: p._paystack }));
       if (data.warning) setErr(data.warning);
       setMsg(data.notified ? `Saved. ${data.notified} user${data.notified === 1 ? "" : "s"} notified.` : "Settings saved.");
       window.dispatchEvent(new Event("nexit:maintenance"));
@@ -193,6 +193,7 @@ export default function AdminSettings() {
       </div>
 
       <PlatformSwitches s={s} setS={setS} loaded={loaded} busy={busy} where={where} save={save} Feedback={Feedback} />
+      <CandidateJourney s={s} setS={setS} loaded={loaded} busy={busy} where={where} save={save} Feedback={Feedback} supabaseEnabled={supabaseEnabled} />
     </>
   );
 }
@@ -467,6 +468,12 @@ function PlatformSwitches({ s, setS, loaded, busy, where, save, Feedback }) {
       </Switch>
 
       <h4 className="sw-group">Payments</h4>
+      <Switch label="Online payments" checked={s.payments_enabled === true} onChange={flip("payments_enabled")} disabled={dis}
+        help={s.payments_enabled === true
+          ? (s._paystack === false
+            ? "On — but Paystack isn't connected (no PAYSTACK_SECRET_KEY), so candidates still see “Payment will be available soon”. Add the key in Netlify and redeploy."
+            : "Candidates can pay for the subscription and training through Paystack.")
+          : `Off — when a candidate tries to pay, they're told payment will be available soon and to contact ${"+234 806 693 2357"} on WhatsApp.`} />
       <Switch label="Training payments" checked={on("training_payments_enabled")} onChange={flip("training_payments_enabled")} disabled={dis}
         help={on("training_payments_enabled") ? "Candidates can pay for Foundational and Intensive training." : "Enrolment is closed — the pay buttons are disabled. Anyone who already paid keeps access."} />
       <Switch label="Interviewer payouts" checked={on("interviewer_payouts_enabled")} onChange={flip("interviewer_payouts_enabled")} disabled={dis}
@@ -495,6 +502,110 @@ function PlatformSwitches({ s, setS, loaded, busy, where, save, Feedback }) {
       <button className="btn-solid" style={{ marginTop: 16 }} disabled={dis} onClick={() => save({}, "other")}>
         <IconCheck width={16} height={16} /> {busy && where === "other" ? "Saving…" : "Save these settings"}
       </button>
+    </div>
+  );
+}
+
+// Multiple roles per candidate + reminders about their next step.
+function CandidateJourney({ s, setS, loaded, busy, where, save, Feedback, supabaseEnabled }) {
+  const on = (k) => s[k] !== false;
+  const flip = (k) => (v) => setS((p) => ({ ...p, [k]: v }));
+  const val = (k) => (e) => setS((p) => ({ ...p, [k]: e.target.value }));
+  const dis = !loaded || busy;
+  return (
+    <div className="card pad set-card" id="journey">
+      <h3 className="card-title">Candidate roles &amp; reminders</h3>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>How many roles a subscriber can pursue, and when candidates are reminded of their next step.</p>
+
+      <h4 className="sw-group">Multiple roles</h4>
+      <div className="sw-row">
+        <div className="sw-main">
+          <div className="sw-text">
+            <span className="sw-label">Roles per subscriber</span>
+            <span className="sw-help">Subscribers can add more roles from their dashboard (My roles). Each role has its own CV, AI interview, Professional and HR interviews and certificate. Non-subscribers pursue one role.</span>
+          </div>
+          <div className="field field-simple sw-num" style={{ margin: 0 }}>
+            <input aria-label="Roles per subscriber" type="number" min="1" max="10" value={s.max_roles_per_candidate ?? 3} onChange={val("max_roles_per_candidate")} disabled={dis} />
+          </div>
+        </div>
+      </div>
+
+      <h4 className="sw-group">Automatic reminders</h4>
+      <Switch label="Remind candidates of their next step" checked={on("nudges_enabled")} onChange={flip("nudges_enabled")} disabled={dis}
+        help={on("nudges_enabled")
+          ? "Once a day, candidates who haven't acted on their next step (upload a CV, take the AI interview, book an interview…) get an email and a notification. Nobody is reminded while they're waiting on us. Needs CRON_SECRET in Netlify (see SETUP.md)."
+          : "No automatic reminders. You can still remind candidates manually below or from CV Reviews."}>
+        {on("nudges_enabled") && (
+          <div className="field-row">
+            <div className="field field-simple">
+              <label htmlFor="nd-after">First reminder after (days on a step)</label>
+              <input id="nd-after" type="number" min="1" max="60" value={s.nudge_after_days ?? 3} onChange={val("nudge_after_days")} disabled={dis} />
+            </div>
+            <div className="field field-simple">
+              <label htmlFor="nd-every">Then every (days)</label>
+              <input id="nd-every" type="number" min="1" max="60" value={s.nudge_interval_days ?? 4} onChange={val("nudge_interval_days")} disabled={dis} />
+            </div>
+            <div className="field field-simple">
+              <label htmlFor="nd-max">At most (reminders per step)</label>
+              <input id="nd-max" type="number" min="0" max="10" value={s.nudge_max_per_step ?? 3} onChange={val("nudge_max_per_step")} disabled={dis} />
+            </div>
+          </div>
+        )}
+      </Switch>
+
+      <Feedback at="journey" />
+      <button className="btn-solid" style={{ marginTop: 16 }} disabled={dis} onClick={() => save({}, "journey")}>
+        <IconCheck width={16} height={16} /> {busy && where === "journey" ? "Saving…" : "Save these settings"}
+      </button>
+
+      <RemindByStep supabaseEnabled={supabaseEnabled} />
+    </div>
+  );
+}
+
+// "Where are candidates stuck?" — counts per step, with one-click reminders.
+function RemindByStep({ supabaseEnabled }) {
+  const [steps, setSteps] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState({});
+  const load = async () => {
+    if (!supabaseEnabled) { setSteps([]); return; }
+    try { const r = await fetch("/api/admin/remind", { cache: "no-store" }); const j = await r.json(); setSteps(r.ok ? j.steps || [] : []); } catch { setSteps([]); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [supabaseEnabled]);
+  const remindAll = async (st) => {
+    if (!window.confirm(`Email and notify all ${st.count} candidate${st.count === 1 ? "" : "s"} at “${st.title}”?`)) return;
+    setBusy(st.key);
+    try {
+      const r = await fetch("/api/admin/remind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stepKey: st.key }) });
+      const j = await r.json();
+      setNote((n) => ({ ...n, [st.key]: r.ok ? `Reminded ${j.sent} of ${j.total}` : j.error || "Failed" }));
+    } catch (e) { setNote((n) => ({ ...n, [st.key]: e.message })); }
+    setBusy("");
+  };
+  return (
+    <div className="rbs">
+      <h4 className="sw-group">Where candidates are now</h4>
+      {steps === null ? <p className="sw-help">Loading…</p> : steps.length === 0 ? (
+        <p className="sw-help">{supabaseEnabled ? "No candidates yet." : "Connect Supabase to see where candidates are and remind them."}</p>
+      ) : (
+        <table className="tbl rbs-tbl">
+          <thead><tr><th>Step</th><th>Candidates</th><th /></tr></thead>
+          <tbody>
+            {steps.map((st) => (
+              <tr key={st.key}>
+                <td><span className="rbs-stage">Stage {st.stage}</span> {st.title}{!st.actionable && <span className="rbs-wait"> · waiting on NexIT</span>}</td>
+                <td><b>{st.count}</b></td>
+                <td style={{ textAlign: "right" }}>
+                  {note[st.key] ? <span className="rbs-note">{note[st.key]}</span> : st.actionable && st.key !== "done" ? (
+                    <button className="mini-btn" disabled={!!busy} onClick={() => remindAll(st)}>{busy === st.key ? "Sending…" : "Remind all"}</button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

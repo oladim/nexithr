@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { SUPABASE_ENABLED } from "@/lib/supabase/config";
+import { isTransientAuthError } from "@/lib/supabase/authErrors";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import * as db from "@/lib/db";
 import { computeStageResult } from "@/components/interview/stage";
@@ -64,6 +65,11 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState("candidate");
   const [app, setApp] = useState(emptyApp);
   const [hydrated, setHydrated] = useState(false);
+  // CV chosen during sign-up. A new account has no session until the email is
+  // confirmed, so the file is kept in memory and uploaded (through the secure
+  // upload API) as soon as the candidate is signed in, in this same tab.
+  const pendingCvRef = useRef(null);
+  const setPendingCv = (file) => { pendingCvRef.current = file || null; };
   const [viewAs, setViewAs] = useState("candidate");
   const [interviewerKind, setInterviewerKind] = useState("Professional");
   const [approvalStatus, setApprovalStatus] = useState("approved");
@@ -73,10 +79,26 @@ export function AuthProvider({ children }) {
   // Load the signed-in user's profile + (if candidate) app data from Postgres.
   const bootstrapFromSupabase = useCallback(async () => {
     if (!supabase) return;
-    const {
+    let {
       data: { user: authUser },
+      error: authErr,
     } = await supabase.auth.getUser();
+    // A network blip or token-refresh race is not a sign-out: fall back to
+    // the locally stored session (and retry) instead of bouncing to /login.
+    if (!authUser && isTransientAuthError(authErr)) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await new Promise((r) => setTimeout(r, 400));
+        ({ data: { user: authUser }, error: authErr } = await supabase.auth.getUser());
+        if (!authUser) authUser = session.user;
+      }
+    }
     if (!authUser) {
+      // Definitively invalid (expired/revoked) → clear the stale local
+      // session too, so nothing keeps thinking we're signed in.
+      if (authErr && !isTransientAuthError(authErr)) {
+        try { await supabase.auth.signOut({ scope: "local" }); } catch { /* ignore */ }
+      }
       setUser(null);
       setHydrated(true);
       return;
@@ -114,11 +136,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (SUPABASE_ENABLED && supabase) {
       bootstrapFromSupabase();
-      const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-        if (!session) {
+      // Only a real SIGNED_OUT clears the user. Token refreshes and the
+      // initial-session event must not reload or wipe anything (they fire on
+      // tab focus and refresh races and caused random "signed out" bounces).
+      const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_OUT") {
           setUser(null);
           setApp(emptyApp);
-        } else {
+        } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
           bootstrapFromSupabase();
         }
       });
@@ -267,7 +292,9 @@ export function AuthProvider({ children }) {
   const completeSignup = () => {
     const name = [signup.firstName, signup.lastName].filter(Boolean).join(" ");
     setUser({ email: signup.email, name: name || "Candidate" });
-    if (signup.cvName) {
+    // Demo only: there's no backend, so the chosen CV is recorded locally. On
+    // the live platform a CV exists only once it's really uploaded and stored.
+    if (!SUPABASE_ENABLED && signup.cvName) {
       setApp((prev) => ({
         ...prev,
         cv: prev.cv || { name: signup.cvName, uploadedAt: new Date().toISOString(), industry: "", jobType: signup.jobType || "Full-time", status: "Pending review" },
@@ -300,6 +327,18 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Before a portal bounces someone to /login, double-check: is there really
+  // no session? If one exists (the earlier check hit a blip), reload instead.
+  const confirmSignedOut = useCallback(async () => {
+    if (!(SUPABASE_ENABLED && supabase)) return true;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return true;
+      await bootstrapFromSupabase();
+      return false;
+    } catch { return true; }
+  }, [supabase, bootstrapFromSupabase]);
+
   // Helper to get the current auth user id in REAL mode.
   const getUid = useCallback(async () => {
     if (!supabase) return null;
@@ -308,38 +347,61 @@ export function AuthProvider({ children }) {
   }, [supabase]);
 
   // ---- CV ----
-  // Returns { error, warning } so the CV page can report upload problems
-  // (e.g. the Storage bucket/policy migration wasn't run) instead of silently
-  // saving a fileless record.
+  // Uploads go through /api/cv/upload, which checks the real file on the
+  // server (PDF/DOCX only, no scripts/macros, must open) before filing it.
+  // Returns { error } or { warning } for the CV page to show.
   const uploadCv = async (cv) => {
+    let saved = null;
     let warning = null;
     if (SUPABASE_ENABLED && supabase) {
-      const id = await getUid();
-      if (!id) return { error: "You need to be signed in to upload a CV." };
-      let path = null;
-      if (cv.file) {
-        try {
-          path = await db.uploadCvFile(supabase, id, cv.file);
-        } catch (e) {
-          // Surface the real reason (common: "Bucket not found" → run
-          // supabase/migrations/0002_storage.sql).
-          warning = `Your details were saved, but the file couldn't be stored: ${e.message || e}. ` +
-            `Make sure the Storage buckets exist (run 0002_storage.sql) and try again.`;
-        }
-      }
-      const { error } = await db.saveCvRow(supabase, id, {
-        fileName: cv.name || "cv.pdf", filePath: path, industry: cv.industry, jobType: cv.jobType,
-      });
-      if (error) return { error: error.message };
-      reportEvent("cv_uploaded"); // emails the team inbox: CV awaiting review
+      if (!cv.file) return { error: "Choose a PDF or Word (.docx) file to upload." };
+      const call = async (payload) => {
+        const r = await fetch("/api/cv/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const j = await r.json().catch(() => ({}));
+        return r.ok ? j : { error: j.error || `Upload failed (${r.status}).` };
+      };
+      const start = await call({ step: "start", name: cv.file.name, size: cv.file.size });
+      if (start.error) return { error: start.error };
+      const { error: upErr } = await supabase.storage.from("cvs").uploadToSignedUrl(start.path, start.token, cv.file, { contentType: start.contentType });
+      if (upErr) return { error: /size|exceed/i.test(upErr.message) ? "Your CV is larger than 5 MB." : `Upload failed: ${upErr.message}` };
+      const fin = await call({ step: "finish", path: start.path, name: cv.file.name, industry: cv.industry, jobType: cv.jobType });
+      if (fin.error) return { error: fin.error };
+      saved = fin.cv;
+      warning = fin.warning || null;
     }
     setApp((prev) => ({
       ...prev,
-      cv: { name: cv.name || "cv.pdf", uploadedAt: new Date().toISOString(), industry: cv.industry || "", jobType: cv.jobType || "Full-time", status: "Pending review" },
+      cv: saved || { name: cv.name || "cv.pdf", uploadedAt: new Date().toISOString(), industry: cv.industry || "", jobType: cv.jobType || "Full-time", status: "Pending review" },
     }));
     return warning ? { warning } : {};
   };
+  // Delete the CV for the active role (only before the AI interview starts).
+  const deleteCv = async () => {
+    if (SUPABASE_ENABLED && supabase) {
+      const r = await fetch("/api/cv/upload", { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return { error: j.error || "Couldn't delete the CV." };
+    } else if (app.aiInterview?.attempts > 0) {
+      return { error: "Your AI interview has already started, so your CV can't be deleted." };
+    }
+    setApp((prev) => ({ ...prev, cv: null }));
+    return {};
+  };
   const clearCv = () => setApp((prev) => ({ ...prev, cv: null }));
+
+  // Upload the CV picked at sign-up once the new candidate is signed in.
+  const [pendingCvState, setPendingCvState] = useState(null); // null | uploading | done | error text
+  useEffect(() => {
+    const f = pendingCvRef.current;
+    if (!f || !SUPABASE_ENABLED || !hydrated || !user || role !== "candidate") return;
+    if (app.cv) { pendingCvRef.current = null; return; }
+    pendingCvRef.current = null;
+    setPendingCvState("uploading");
+    uploadCv({ name: f.name, file: f, jobType: signup.jobType || "Full-time" })
+      .then((r) => setPendingCvState(r?.error ? r.error : "done"))
+      .catch((e) => setPendingCvState(e?.message || "Upload failed"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, user, role, app.cv]);
 
   // ---- Interviews ----
   const scheduleInterview = async (data) => {
@@ -481,8 +543,8 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider
       value={{
-        signup, updateSignup, user, role, login, loginDemo, signUpUser, verifyEmailOtp, resendConfirmation, completeSignup, logout, hydrated,
-        app, uploadCv, clearCv, scheduleInterview, addLocalInterviews, cancelInterview, recordAiAttempt, completeStage, retryStage,
+        signup, updateSignup, user, role, confirmSignedOut, login, loginDemo, signUpUser, verifyEmailOtp, resendConfirmation, completeSignup, logout, hydrated,
+        app, uploadCv, deleteCv, clearCv, setPendingCv, pendingCvState, scheduleInterview, addLocalInterviews, cancelInterview, recordAiAttempt, completeStage, retryStage,
         unlockTraining, toggleSaveTraining, viewAs, interviewerKind, approvalStatus, uploadStaffDoc, refreshApp,
         enterInterviewer, exitInterviewer, enterRecruiter, enterAdmin, exitPortal, addInterviewerNote, recordAiFinal,
         supabaseEnabled: SUPABASE_ENABLED,

@@ -31,6 +31,7 @@ export async function POST() {
   const s = await loadSettings(admin);
   const to = s.admin_alert_email || "support@nexitafrica.com";
   const r = await sendEmail({
+    signature: false, // internal alert
     to,
     subject: "[NexIT] Test alert",
     heading: "Admin alerts are working",

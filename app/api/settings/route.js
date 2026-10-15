@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings, DEFAULT_SETTINGS } from "@/lib/db";
 import { paystackMode } from "@/lib/paystack";
+import { paymentsStatus } from "@/lib/payments";
 import { maintenanceFromSettings } from "@/lib/maintenance";
 
 export const runtime = "nodejs";
@@ -66,5 +67,8 @@ function toClient(s) {
     aiRetakeCooldownEnabled: s.ai_retake_cooldown_enabled !== false,
     aiRetakeCooldownDays: Number(s.ai_retake_cooldown_days ?? 30),
     trainingPaymentsEnabled: s.training_payments_enabled !== false,
+    // Can candidates actually pay right now? (admin switch + Paystack connected)
+    paymentsAvailable: paymentsStatus(s).subscription,
+    trainingPaymentsAvailable: paymentsStatus(s).training,
   };
 }

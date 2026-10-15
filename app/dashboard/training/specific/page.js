@@ -8,6 +8,7 @@ import TrainingTabs from "@/components/dashboard/TrainingTabs";
 import Testimonials from "@/components/Testimonials";
 import { ROLE_LABELS, loadSpecificCourses } from "@/lib/db";
 import { startPayment, formatMoney } from "@/lib/billing";
+import { PaymentSoonNote } from "@/components/PaymentSoon";
 import { IconLock, IconCheck } from "@/components/Icons";
 import CourseRequest from "@/components/dashboard/CourseRequest";
 
@@ -33,7 +34,7 @@ export default function SpecificTrainingPage() {
           currency: s.settings.currency || "NGN",
         });
         if (Array.isArray(s?.roles)) setRoles(s.roles);
-        if (s?.settings?.trainingPaymentsEnabled === false) setEnrolClosed(true);
+        if (s?.settings && s.settings.trainingPaymentsAvailable !== true) setEnrolClosed(true);
       } catch { /* defaults */ }
       if (supabaseEnabled) {
         try { setAccess(await (await fetch("/api/me/access")).json()); } catch { setAccess(null); }
@@ -52,7 +53,7 @@ export default function SpecificTrainingPage() {
     if (!roleKey) { alert("Set your target role first."); return; }
     setBusyTier(tier);
     const r = await startPayment({ purpose: "training", roleKey, tier });
-    if (r?.error) { alert(r.error); setBusyTier(""); }
+    if (!r?.ok) { if (r?.error) alert(r.error); setBusyTier(""); }
   };
 
   const byLevel = (lvl) => courses.filter((c) => c.level === lvl);
@@ -101,9 +102,8 @@ export default function SpecificTrainingPage() {
       </div>
 
       {enrolClosed && (
-        <div className="consent-warn" style={{ margin: "0 0 16px" }}>
-          <IconLock />
-          <span><b>Enrolment is temporarily closed.</b> You can&apos;t pay for training right now — check back soon, or request a course below and we&apos;ll let you know when it opens.</span>
+        <div className="card pad" style={{ margin: "0 0 16px" }}>
+          <PaymentSoonNote compact />
         </div>
       )}
 
@@ -160,8 +160,8 @@ function TierCard({ name, price, blurb, points, highlight, busy, onBuy, closed }
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {points.map((p, i) => <span key={i} className="d" style={{ fontSize: 13 }}><IconCheck width={13} height={13} style={{ marginRight: 6 }} /> {p}</span>)}
       </div>
-      <button className={highlight ? "btn-solid" : "btn-outline"} style={{ marginTop: "auto", justifyContent: "center" }} disabled={busy || closed} onClick={onBuy}>
-        {closed ? "Enrolment closed" : busy ? "Starting…" : `Enrol — ${price}`}
+      <button className={highlight ? "btn-solid" : "btn-outline"} style={{ marginTop: "auto", justifyContent: "center" }} disabled={busy} onClick={onBuy}>
+        {closed ? "Payment available soon" : busy ? "Starting…" : `Enrol — ${price}`}
       </button>
     </div>
   );

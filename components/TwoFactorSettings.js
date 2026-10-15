@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetch2faStatus } from "@/components/TwoFactorGate";
 import { useAuth } from "@/components/context/AuthContext";
 import { IconLock, IconCheck } from "@/components/Icons";
 
@@ -15,7 +16,8 @@ export default function TwoFactorSettings() {
   const [msg, setMsg] = useState("");
 
   const load = async () => {
-    try { const r = await fetch("/api/2fa"); const d = await r.json(); setEnabled(!!d.enabled); } catch { setEnabled(false); }
+    // null from fetch2faStatus = couldn't check; keep showing "checking" rather than "off".
+    const on = await fetch2faStatus(); if (on !== null) setEnabled(on);
   };
   useEffect(() => { if (supabaseEnabled) load(); else setEnabled(false); /* eslint-disable-next-line */ }, [supabaseEnabled]);
 

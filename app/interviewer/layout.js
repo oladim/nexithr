@@ -35,11 +35,17 @@ const NAV = [
 export default function InterviewerLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, hydrated, interviewerKind, logout } = useAuth();
+  const { user, hydrated, interviewerKind, logout, confirmSignedOut } = useAuth();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (hydrated && !user) router.replace("/login");
+    if (!hydrated || user) return undefined;
+    // Re-check before bouncing: a momentary auth hiccup isn't a sign-out.
+    let live = true;
+    confirmSignedOut().then((out) => {
+      if (live && out) router.replace(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+    });
+    return () => { live = false; };
   }, [hydrated, user, router]);
   useEffect(() => setOpen(false), [pathname]);
 

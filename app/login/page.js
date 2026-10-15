@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthLayout from "@/components/auth/AuthLayout";
@@ -20,12 +20,31 @@ export default function LoginPage() {
   const [twoFA, setTwoFA] = useState({ pending: false, role: null });
   const [code, setCode] = useState("");
 
+  // Where to go after signing in: the page that sent us here (?redirect=…),
+  // if it's a safe same-site path; otherwise the role's home.
+  const redirectTarget = () => {
+    try {
+      const r = new URLSearchParams(window.location.search).get("redirect") || "";
+      return /^\/(?!\/)[\w\-/.?=&%]*$/.test(r) && !r.startsWith("/login") ? r : null;
+    } catch { return null; }
+  };
+  const submittingRef = useRef(false);
+
+  // Already signed in and bounced here by a blip → go straight back.
+  useEffect(() => {
+    if (!hydrated || !user || submittingRef.current || twoFA.pending) return;
+    const back = redirectTarget();
+    if (back) router.replace(back);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, user]);
+
   const routeFor = (role) =>
     role === "interviewer" ? "/interviewer" : role === "recruiter" ? "/recruiter" : role === "admin" ? "/admin" : "/dashboard";
 
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) return;
+    submittingRef.current = true;
     setError("");
     setBusy(true);
     const res = await login(email, password);
@@ -47,7 +66,7 @@ export default function LoginPage() {
       } catch { /* if the check fails, fall through to normal routing */ }
     }
     router.refresh(); // sync server components with the new session cookie
-    router.push(routeFor(res?.role));
+    router.push(redirectTarget() || routeFor(res?.role));
   };
 
   const verify2FA = async (e) => {
@@ -59,7 +78,7 @@ export default function LoginPage() {
       setBusy(false);
       if (!r.ok) { setError(d.error || "Invalid code"); return; }
       router.refresh();
-      router.push(routeFor(twoFA.role));
+      router.push(redirectTarget() || routeFor(twoFA.role));
     } catch { setBusy(false); setError("Couldn't verify the code"); }
   };
 

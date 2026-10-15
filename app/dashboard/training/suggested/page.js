@@ -8,6 +8,8 @@ import TrainingTabs from "@/components/dashboard/TrainingTabs";
 import Testimonials from "@/components/Testimonials";
 import { startPayment, formatMoney } from "@/lib/billing";
 import { IconCap } from "@/components/Icons";
+import AiSuggestions from "@/components/training/AiSuggestions";
+import { normalizeSuggestions } from "@/lib/trainingSuggestions";
 
 function ResourceList({ heading, items }) {
   if (!items || items.length === 0) return null;
@@ -20,28 +22,6 @@ function ResourceList({ heading, items }) {
             <b style={{ fontSize: 14 }}>{r.title}</b>
             {r.description && <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>{r.description}</p>}
             {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="link" style={{ fontSize: 13, marginTop: "auto" }}>Open resource →</a>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// One group of the AI-generated plan.
-function PlanGroup({ title, items }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {items.map((it, i) => (
-          <div key={i} style={{ border: "1px solid #eef1f6", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <b style={{ fontSize: 14 }}>{it.title}</b>
-              {it.est_time ? <span style={{ fontSize: 12, color: "var(--gray-500)" }}>{it.est_time}</span> : null}
-            </div>
-            {it.focus ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--gray-600)" }}>Closes: {it.focus}</p> : null}
-            {it.resource ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--gray-500)" }}>Resource: {it.resource}</p> : null}
           </div>
         ))}
       </div>
@@ -78,32 +58,32 @@ export default function SuggestedTrainingPage() {
   const subscribe = async () => {
     setBusy(true);
     const r = await startPayment({ purpose: "subscription" });
-    if (r?.error) { alert(r.error); setBusy(false); }
+    if (!r?.ok) { if (r?.error) alert(r.error); setBusy(false); }
   };
 
-  const hasPlan = plan && ((plan.technical?.length || 0) + (plan.administrative?.length || 0) > 0);
+  const hasPlan = normalizeSuggestions(plan).length > 0;
 
   return (
     <>
       <TrainingTabs />
 
-      {hasPlan && (
+      {hasPlan ? (
         <div className="card pad" style={{ marginBottom: 18 }}>
-          <h3 className="card-title" style={{ marginTop: 0 }}>Your personalised plan (from your AI interview)</h3>
-          <p style={{ marginTop: 0, fontSize: 13, color: "var(--muted)" }}>
-            Built from your diagnostic. Work through these free resources on your own — then NexIT&apos;s specific training takes you the rest of the way.
-          </p>
-          <PlanGroup title="Technical skills" items={plan.technical} />
-          <PlanGroup title="Administrative &amp; professional skills" items={plan.administrative} />
+          <AiSuggestions raw={plan} />
+        </div>
+      ) : (
+        <div className="card pad" style={{ marginBottom: 18 }}>
+          <h3 className="card-title" style={{ marginTop: 0 }}>Suggested training from your AI interview</h3>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>After your AI interview, you&apos;ll get up to 6 training topics picked for your gaps — with links to learn them on YouTube, Coursera, Udemy or online.</p>
         </div>
       )}
 
       {unlocked ? (
         <>
           <div className="card pad">
-            <h3 className="card-title" style={{ marginTop: 0 }}>Recommended resources</h3>
+            <h3 className="card-title" style={{ marginTop: 0 }}>More resources from NexIT</h3>
             {resources.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>No curated resources yet — your personalised plan above is a great place to start.</p>
+              <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>No extra resources from our team yet — the suggestions above are a great place to start.</p>
             ) : (
               <>
                 <ResourceList heading="Technical" items={resources.filter((r) => r.category === "technical")} />
@@ -117,11 +97,11 @@ export default function SuggestedTrainingPage() {
       ) : (
         <div className="train-gate">
           <span className="gi"><IconCap width={32} height={32} /></span>
-          <h3>Suggested Training is a subscriber benefit</h3>
+          <h3>More resources from NexIT are a subscriber benefit</h3>
           <p>
-            Subscribe for a year to unlock suggested training and get unlimited AI
-            interview retakes. Your subscription keeps you moving without the
-            one-month retake wait.
+            Your AI suggestions above are free. Subscribe for a year to also get the
+            extra resources our team curates for your role, plus unlimited AI
+            interview retakes without the retake wait.
           </p>
           <button className="btn-solid" style={{ display: "inline-flex" }} disabled={busy} onClick={subscribe}>
             <IconCap width={16} height={16} /> {busy ? "Starting…" : `Subscribe — ${formatMoney(pricing.subscriptionAnnualAmount, pricing.currency)}/year`}

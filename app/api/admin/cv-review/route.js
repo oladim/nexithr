@@ -79,9 +79,9 @@ export async function POST(request) {
     status === "Approved"
       ? `Your CV has been approved — you can now take your AI interview.${reason ? `\n\nReviewer note: ${reason}` : ""}`
       : status === "Rejected"
-      ? `Your CV was not approved.\n\nReason: ${reason}\n\nPlease update your CV and upload it again — you can take the AI interview once it's approved.`
+      ? `Your CV was not approved.\n\nReason: ${reason}\n\nYou can upload a stronger CV on your CV page — it replaces the current one and comes straight back to us for review — or choose a level or role that better matches your background.`
       : status === "Changes requested"
-      ? `Your CV needs a few changes before it can be approved.\n\nWhat to change: ${reason}\n\nPlease upload the updated CV — you can take the AI interview once it's approved.`
+      ? `Your CV needs a few changes before it can be approved.\n\nWhat to change: ${reason}\n\nAll you need to do is upload your updated CV on your CV page. It replaces the current one and comes straight back to us for review — you can take the AI interview once it's approved.`
       : reason || "Your CV review status was updated.";
   const res = await notifyUser(admin, {
     userId: candidateId,
@@ -90,7 +90,7 @@ export async function POST(request) {
     emailSubject: `NexIT-Africa — your CV was ${verb}`,
     cta: status === "Approved"
       ? { label: "Take the AI interview", path: "/dashboard/interview/ai" }
-      : { label: "Upload a new CV", path: "/dashboard/cv-upload" },
+      : { label: status === "Changes requested" ? "Upload your updated CV" : "Upload a new CV", path: "/dashboard/cv-upload" },
   });
   const email = { sent: res.emailSent, reason: res.reason };
 

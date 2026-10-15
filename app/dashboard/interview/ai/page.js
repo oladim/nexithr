@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, AI_PASS_MARK } from "@/components/context/AuthContext";
 import { startPayment, formatMoney } from "@/lib/billing";
+import AiSuggestions from "@/components/training/AiSuggestions";
 import {
   IconVideo,
   IconMic,
@@ -35,16 +36,13 @@ const DEMO_QUESTIONS = [
   "Tell me about a time you disagreed with a teammate. How did you handle it?",
   "Where do you want to grow next, and why this role?",
 ];
-const DEMO_PLAN = {
-  technical: [
-    { title: "System design fundamentals", focus: "Shaky on scaling & trade-offs", resource: "freeCodeCamp / 'System Design Primer' (GitHub)", est_time: "2–3 weeks" },
-    { title: "Testing & debugging practice", focus: "Thin production-debugging evidence", resource: "Build & test a small API; use the language's test runner docs", est_time: "2 weeks" },
-  ],
-  administrative: [
-    { title: "Structured communication (STAR)", focus: "Answers lacked concrete outcomes", resource: "Practice STAR write-ups for 5 past projects", est_time: "1 week" },
-    { title: "Time & task management", focus: "Prioritisation under pressure", resource: "Free 'Agile basics' course + a weekly planning habit", est_time: "ongoing" },
-  ],
-};
+const DEMO_PLAN = { items: [
+  { topic: "System design fundamentals", platform: "youtube", why: "Shaky on scaling and trade-offs" },
+  { topic: "Writing automated tests", platform: "udemy", why: "Thin evidence of testing and debugging in production" },
+  { topic: "REST API design best practices", platform: "coursera", why: "API answers lacked versioning and error-handling detail" },
+  { topic: "STAR method interview answers", platform: "youtube", why: "Answers lacked concrete outcomes" },
+  { topic: "Agile and Scrum basics", platform: "coursera", why: "Prioritisation under pressure" },
+] };
 function demoResult(attemptNo) {
   if (attemptNo <= 1) {
     return {
@@ -60,7 +58,7 @@ function demoResult(attemptNo) {
     breakdown: { Technical: 90, Leadership: 86, Communication: 89, Teamwork: 88, Motivation: 87 },
     summary:
       "Clear, specific, and technically strong answers with good ownership and reflection. Ready to move to the professional interview.",
-    suggestedTraining: { technical: [{ title: "Keep sharp with a build project", focus: "Maintain momentum", resource: "Ship one portfolio project", est_time: "ongoing" }], administrative: [] },
+    suggestedTraining: { items: [{ topic: "Portfolio project ideas", platform: "youtube", why: "Keep your momentum with a real build" }] },
   };
 }
 
@@ -167,10 +165,10 @@ export default function AiInterviewPage() {
   const subscribe = async () => {
     setSubBusy(true);
     const res = await startPayment({ purpose: "subscription" });
-    if (res?.error) { alert(res.error); setSubBusy(false); }
+    if (!res?.ok) { if (res?.error) alert(res.error); setSubBusy(false); }
   };
 
-  const [step, setStep] = useState("consent"); // consent | live | processing | result | payment
+  const [step, setStep] = useState("consent"); // consent | live | processing | result
   const [consented, setConsented] = useState(false);
 
   // media
@@ -513,8 +511,9 @@ export default function AiInterviewPage() {
       sessionIdRef.current = data.sessionId || null;
       convoRef.current = [{ role: "assistant", content: data.opening }];
       presentAiTurn(data.opening);
-    } else if (!data?.reason || data.reason === "no-key") {
-      // Genuinely no API key configured → scripted practice interview.
+    } else if (!supabaseEnabled && (!data?.reason || data.reason === "no-key")) {
+      // Demo build with no API key → scripted practice interview. (Never on the
+      // live platform: there a missing engine is an error, not a free pass.)
       setMode("demo");
       presentAiTurn(DEMO_QUESTIONS[0]);
     } else {
@@ -1073,14 +1072,14 @@ export default function AiInterviewPage() {
           </div>
           <div className="assess-actions">
             <button className="btn-outline" onClick={retake}><IconRefresh width={16} height={16} /> Retake test</button>
-            <button className="btn-solid" onClick={() => setStep("payment")}><IconCap width={16} height={16} /> Unlock training</button>
+            <button className="btn-solid" onClick={() => router.push("/dashboard/training")}><IconCap width={16} height={16} /> See training options</button>
           </div>
         </div>
       );
     }
 
     const gaps = result.critical_gaps || [];
-    const plan = result.suggestedTraining || { technical: [], administrative: [] };
+    const plan = result.suggestedTraining || null;
     const band = result.band || bandOf(result.score);
     const pending = result.status === "pending_review";
 
@@ -1136,17 +1135,8 @@ export default function AiInterviewPage() {
               </div>
             )}
 
-            {/* AI-GENERATED PERSONALISED TRAINING PLAN */}
-            {(plan.technical?.length > 0 || plan.administrative?.length > 0) && (
-              <div className="feedback-card">
-                <h5>Your personalised training plan</h5>
-                <p style={{ marginTop: 0, fontSize: 13, color: "var(--gray-500)" }}>
-                  Built from your interview. Start these on your own now — then NexIT&apos;s role-specific programme takes you the rest of the way.
-                </p>
-                <PlanGroup title="Technical skills" items={plan.technical} />
-                <PlanGroup title="Administrative & professional skills" items={plan.administrative} />
-              </div>
-            )}
+            {/* AI-suggested training (max 6 topics with links) */}
+            <div style={{ marginBottom: 16 }}><AiSuggestions raw={plan} /></div>
 
             {/* Competency breakdown */}
             <div className="breakdown">
@@ -1205,64 +1195,9 @@ export default function AiInterviewPage() {
     );
   }
 
-  // ---- Unlock training / payment ----
-  if (step === "payment") {
-    return (
-      <>
-        <div className="page-head">
-          <h1>Unlock Your Training Access</h1>
-          <p>Get tailored training and 2 AI retries per month to pass the assessment.</p>
-        </div>
-        <div className="unlock">
-          <div className="lock-box">
-            <h4>Sample Questions</h4>
-            <div className="lock-inner">
-              <span className="lk"><IconLock width={64} height={64} /></span>
-              <div className="lock-cta">Unlock Your Training For $29</div>
-            </div>
-          </div>
-          <div className="pay-card">
-            <h4>Payment</h4>
-            <div className="field field-simple"><label>Card number</label><input placeholder="1234 5678 9012 3456" /></div>
-            <div className="field-row">
-              <div className="field field-simple"><label>MM / YY</label><input placeholder="08 / 27" /></div>
-              <div className="field field-simple"><label>CVV</label><input placeholder="123" /></div>
-            </div>
-            <div className="field field-simple"><label>Billing email</label><input placeholder="you@example.com" defaultValue={signup.email} /></div>
-            <button className="btn-solid" style={{ width: "100%", justifyContent: "center", marginTop: 8 }} onClick={() => { unlockTraining(); router.push("/dashboard/training"); }}>
-              <IconCard width={16} height={16} /> Continue payment
-            </button>
-            <button className="btn-outline" style={{ width: "100%", justifyContent: "center", marginTop: 12 }} onClick={() => setStep("result")}>Cancel</button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return null;
 }
 
-/* One group (Technical / Administrative) of the AI training plan. */
-function PlanGroup({ title, items }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {items.map((it, i) => (
-          <div key={i} style={{ border: "1px solid #eef1f6", borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <b style={{ fontSize: 14 }}>{it.title}</b>
-              {it.est_time ? <span style={{ fontSize: 12, color: "var(--gray-500)" }}>{it.est_time}</span> : null}
-            </div>
-            {it.focus ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--gray-600)" }}>Closes: {it.focus}</p> : null}
-            {it.resource ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--gray-500)" }}>Resource: {it.resource}</p> : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* Conic-gradient score ring (no chart library). */
 function ScoreRing({ score, passed }) {

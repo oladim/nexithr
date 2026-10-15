@@ -26,10 +26,10 @@ export default function CongratulationsPage() {
         </span>
         <h1>Congratulations, {firstName}! 🎉</h1>
         <p>
-          Your NexIT-Africa account is ready. Next up is your{" "}
-          <b>AI interview</b> — you&apos;ll be assessed against your chosen
-          role&apos;s requirements. Score <b>85%+</b> to advance to the
-          professional interview stage.
+          Your NexIT-Africa account is ready. Next, our team reviews your{" "}
+          <b>CV</b> against your chosen role — once it&apos;s approved, your{" "}
+          <b>AI interview</b> unlocks. If you haven&apos;t uploaded your CV yet,
+          you can do it from your dashboard.
         </p>
         <button className="auth-btn" onClick={() => router.push("/dashboard")}>
           Go to dashboard

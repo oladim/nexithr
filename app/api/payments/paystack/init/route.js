@@ -3,13 +3,26 @@ import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { loadSettings } from "@/lib/db";
 import { paystackInit, newReference } from "@/lib/paystack";
+import { paymentsStatus } from "@/lib/payments";
+import { COMPANY } from "@/lib/company";
 
 export const runtime = "nodejs";
 
 // POST /api/payments/paystack/init  { purpose: "subscription"|"training", roleKey? }
-// Creates a pending candidate payment and returns a Paystack authorization URL
-// (or a mock callback URL when no Paystack key is configured).
+// Creates a pending candidate payment and returns a Paystack authorization URL.
+// When online payments are switched off (or Paystack isn't connected) it
+// returns { unavailable: true } and the app shows "available soon" + WhatsApp.
+const soon = () => NextResponse.json({
+  unavailable: true,
+  error: `Online payment will be available soon. For details on payment, reach out to us on WhatsApp: ${COMPANY.whatsapp}.`,
+}, { status: 503 });
+
 export async function POST(request) {
+  const admin0 = getServiceSupabase();
+  if (!admin0) return soon();
+  const st0 = paymentsStatus(await loadSettings(admin0));
+  if (!st0.subscription) return soon();
+
   const me = await getSessionProfile();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
@@ -27,9 +40,7 @@ export async function POST(request) {
   const settings = await loadSettings(admin);
   const tier = body?.tier === "foundational" ? "foundational" : "intensive";
   let amount = Number(settings.subscription_annual_amount);
-  if (purpose === "training" && settings.training_payments_enabled === false) {
-    return NextResponse.json({ error: "Training enrolment is temporarily closed. Please check back soon.", closed: true }, { status: 403 });
-  }
+  if (purpose === "training" && !paymentsStatus(settings).training) return soon();
   if (purpose === "training") {
     if (!roleKey) return NextResponse.json({ error: "roleKey is required for training" }, { status: 400 });
     const { data: role } = await admin.from("role_requirements").select("training_amount, foundational_amount, title, enabled").eq("role_key", roleKey).maybeSingle();
@@ -64,6 +75,7 @@ export async function POST(request) {
     callbackUrl,
     metadata: { candidateId: me.id, purpose, roleKey },
   });
+  if (init.unavailable) { await admin.from("candidate_payments").delete().eq("reference", reference); return soon(); }
   if (init.error) return NextResponse.json({ error: init.error }, { status: 502 });
 
   return NextResponse.json({
@@ -72,6 +84,5 @@ export async function POST(request) {
     reference: init.reference,
     amount,
     currency: settings.currency || "NGN",
-    mock: !!init.mock,
   });
 }

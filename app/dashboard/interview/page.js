@@ -66,6 +66,13 @@ export default function InterviewPage() {
 
   // Eligibility from the candidate's real progress.
   const aiPassed = !!app.aiInterview?.passed;
+  // The AI interview unlocks only once a CV is uploaded AND approved.
+  const cvApproved = !!app.cv && (!supabaseEnabled || app.cv.status === "Approved");
+  const aiLockText = !app.cv ? "Upload your CV first — the AI interview unlocks once our team approves it."
+    : app.cv.status === "Changes requested" ? "Our reviewers asked for changes to your CV. Upload the updated CV to continue."
+    : app.cv.status === "Rejected" ? "Your CV wasn't approved. Upload a new CV to continue."
+    : app.cv.status === "Level suggested" ? "Respond to the level suggestion on your CV page to continue."
+    : "Your CV is being reviewed — the AI interview unlocks as soon as it's approved.";
   const proPassed = !!app.stages?.Professional?.passed;
   const eligibility = {
     Professional: aiPassed,
@@ -150,15 +157,19 @@ export default function InterviewPage() {
           <div>
             <b>AI interview</b>
             <div style={{ fontSize: 13, color: "var(--muted)" }}>
-              {aiPassed ? "Completed — you can book a human interview below." : "Take this first — it's instant and unlocks the human interviews."}
+              {aiPassed ? "Completed — you can book a human interview below." : cvApproved ? "Take this first — it's instant and unlocks the human interviews." : aiLockText}
             </div>
           </div>
         </div>
-        {!aiPassed && (
+        {!aiPassed && (cvApproved ? (
           <Link href="/dashboard/interview/ai" className="btn-solid" style={{ padding: "8px 16px", fontSize: 13 }}>
             <IconPlay width={14} height={14} /> Start AI interview
           </Link>
-        )}
+        ) : (
+          <Link href="/dashboard/cv-upload" className="btn-outline" style={{ padding: "8px 16px", fontSize: 13 }}>
+            {!app.cv || /change|reject|level/i.test(app.cv.status || "") ? "Go to my CV" : "View CV status"}
+          </Link>
+        ))}
       </div>
 
       {step < 3 && (

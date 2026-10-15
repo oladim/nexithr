@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/server";
 import { getServiceSupabase } from "@/lib/supabase/admin";
 import { extractPdfText } from "@/lib/cvAnalyze";
+import { currentCv, activeCv } from "@/lib/cvStore";
 import { loadRoleRequirements, ROLE_LABELS, loadSettings, bandFor, loadCandidateAccess } from "@/lib/db";
 import { anthropicChat, anthropicEnabled } from "@/lib/anthropic";
 import {
@@ -67,13 +68,7 @@ async function buildFromSession(profile) {
     .eq("id", userId)
     .maybeSingle();
 
-  const { data: cvRow } = await admin
-    .from("cvs")
-    .select("file_path")
-    .eq("candidate_id", userId)
-    .order("uploaded_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const cvRow = await currentCv(admin, userId, cand?.target_role, "file_path");
 
   const { byKey } = await loadRoleRequirements(admin);
   const roleReq = byKey[cand?.target_role] || null;
@@ -195,7 +190,10 @@ async function retakeBlock(me) {
     if (!access.subscribed && attempts > free && lastAt > 0 && Date.now() < nextEligible) {
       return { blocked: true, reason: "cooldown", nextEligibleAt: new Date(nextEligible).toISOString() };
     }
-  } catch { /* fail open — the client gate still applies */ }
+  } catch {
+    // Fail CLOSED: if we can't confirm an approved CV, the interview doesn't start.
+    return { blocked: true, reason: "cv-pending" };
+  }
   return null;
 }
 
@@ -204,14 +202,16 @@ async function retakeBlock(me) {
 // have reviewed and approved the latest CV first.
 async function prerequisiteBlock(me) {
   const admin = getServiceSupabase();
-  if (!admin || !me || me.role !== "candidate") return null;
+  if (!admin) return null; // demo mode (no backend)
+  if (!me) return { blocked: true, reason: "no-cv", note: "Please sign in again." };
+  if (me.role !== "candidate") return null; // staff previewing the candidate view
   try {
     const st = await loadSettings(admin);
     if (st.ai_interview_enabled === false) return { blocked: true, reason: "paused", note: st.ai_interview_paused_message || "" };
   } catch { /* fall through */ }
   try {
     const [{ data: cv }, { data: cand }] = await Promise.all([
-      admin.from("cvs").select("id, status, review_note").eq("candidate_id", me.id).order("uploaded_at", { ascending: false }).limit(1).maybeSingle(),
+      activeCv(admin, me.id, "id, status, review_note").then((data) => ({ data })),
       admin.from("candidates").select("target_role").eq("id", me.id).maybeSingle(),
     ]);
     if (!cv) return { blocked: true, reason: "no-cv" };
@@ -220,7 +220,10 @@ async function prerequisiteBlock(me) {
     if (cv.status === "Level suggested") return { blocked: true, reason: "level-suggested", note: cv.review_note || "" };
     if (cv.status !== "Approved") return { blocked: true, reason: "cv-pending" };
     if (!cand?.target_role) return { blocked: true, reason: "no-role" };
-  } catch { /* fail open — the client gate still applies */ }
+  } catch {
+    // Fail CLOSED: if we can't confirm an approved CV, the interview doesn't start.
+    return { blocked: true, reason: "cv-pending" };
+  }
   return null;
 }
 
@@ -272,8 +275,9 @@ export async function POST(request) {
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
   const action = body?.action;
 
-  // CV + target role are required before any interview (real or demo) starts.
-  if (action === "start") {
+  // An approved CV + target role are required for EVERY interview call
+  // (start, each turn and the final scoring), not just the first one.
+  {
     const mePre = await getSessionProfile().catch(() => null);
     const pre = await prerequisiteBlock(mePre);
     if (pre) return NextResponse.json(pre);
